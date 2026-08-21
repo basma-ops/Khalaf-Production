@@ -1,0 +1,146 @@
+ Avata 360
+
+> **Status:** v1.0 (2026-08-17) — operating doctrine for the estate's DJI Avata 360 (acquired Aug 2026).
+> **Relation to other docs:** imagery strategy & the mapping-flight gap → [ALTERNATIVES_REUSE.md §3.4](ALTERNATIVES_REUSE.md) · photo pipeline the stills feed into → [ARCHITECTURE.md §6.3](ARCHITECTURE.md) · seasonal timing → [AGRONOMY_OPERATIONS.md](AGRONOMY_OPERATIONS.md) · backup posture → [BACKUP.md](BACKUP.md)
+
+---
+
+## 1. What this drone is — and is not — for the estate
+
+The Avata 360 is a **cinewhoop FPV drone with a dual-lens 360° camera** (announced March 2026). For the estate it is three things:
+
+1. **A memory instrument.** Immersive, season-over-season 360° records of each grove — the "grove memory" idea extended from audit rows to footage a grandchild can stand inside.
+2. **A canopy-top inspection tool.** The one viewpoint neither the phone nor the field walk can produce: crown tops, dieback, top-wood damage, terrace walls from above.
+3. **A biography camera** for the ancient trees — orbit footage and extracted stills that enter each tree's photo timeline through the same audited pipeline as every other photo.
+
+**It is explicitly NOT a mapping drone.** No waypoint/mapping missions, no RTK, fisheye optics with visible stitch lines, electronic (not full mechanical) stabilization. It cannot produce the GCP-controlled orthomosaic that would refresh the tree registry — that remains the separate item in [ALTERNATIVES_REUSE §3.4](ALTERNATIVES_REUSE.md) (GCP'd nadir flight + WebODM at the next imagery refresh). Do not point photogrammetry software at 360 footage and trust the geometry that comes out.
+
+**Honesty rules carried over unchanged:**
+
+- RGB video is not NDVI. Nothing in this footage produces a health index, a stress signal, or an irrigation recommendation.
+- A striking canopy image is not a diagnosis. Inspection findings become **tree observations** (category + severity, via the existing observation flow), with the still attached as evidence.
+- No measurements from 360 frames: fisheye reprojection has no reliable scale. Distances and crown sizes stay with PostGIS and the registry.
+
+---
+
+## 2. Spec sheet (what matters operationally)
+
+| Spec | Value | Operational consequence |
+| --- | --- | --- |
+| Sensors | 2 × 1/1.1″ 64 MP, f/1.9, ~200° FOV each | Excellent light gathering; stitch line where lenses meet — keep subjects off the lens seam |
+| 360 video | 8K/60, 10-bit, HDR; normal + D-Log M | The archival mode — reframe any view later |
+| Single-lens video | 4K/60 | The per-tree orbit mode — no stitch line through the subject |
+| 360 photos | 120 MP (16K) | One shutter press documents an entire grove standpoint |
+| Weight | **455 g** | Above every 250 g threshold — registration/licensing applies (§7) |
+| Flight time | 22 min claimed → **plan 15 min of work** per battery | One battery ≈ one grove pass or 4–6 tree orbits |
+| Storage | 42 GB internal + microSD (V30+) | Internal fills in roughly half an hour of 8K — the card is the real medium |
+| Transmission | O4 Plus (20 km FCC ceiling) | Irrelevant at estate scale; fly VLOS only |
+| Sensing | Omnidirectional + forward LiDAR, full prop guards | Can work close to canopy safely; guards shrug off leaf brushes, not branches |
+| Stabilization | Single-axis mechanical tilt + 360° virtual gimbal | Wobble possible in gusts (cinewhoop) — fly early morning calm |
+| Wind limit | 10.7 m/s (Level 5) | Galilee afternoon breeze is often above comfort — morning flights |
+| Missions | ActiveTrack 360, Spotlight — **no waypoint missions** | Repeatability comes from flight discipline (§4), not automation |
+| Software | DJI Studio (reframe/export), Resolve/Premiere plugins | Post-processing is a desk step, never skipped |
+
+Bitrate is not published; comparable DJI 8K/60 10-bit H.265 runs ≈ 0.9–1.4 GB/min. **First flight task: measure actual GB/min and write it into this table.**
+
+---
+
+## 3. What to record — the four standing programs
+
+### P1 · Seasonal grove pass (360 mode) — the backbone
+Every grove, four times a year, same pattern, same altitude. The value is the *comparison*: the same terrace, season over season, for decades.
+
+| Pass | When (estate calendar) | What it captures |
+| --- | --- | --- |
+| Dormancy | Jan–Feb, after pruning | Structure exposed: pruning quality, wood, terraces |
+| Flowering | May | Bloom intensity per block |
+| Fruit development | Jul–Aug | Canopy density, fruit load forming |
+| Pre-harvest | Early Oct | Fruit color break, harvest planning |
+
+Protocol: launch from the grove's marked launch point → ascend to **25 m** → one slow lawnmower pass over the grove (aligned with the tree rows, ~2 m/s) → one perimeter orbit → land. 8K/60 360, normal color profile (D-Log M only if you commit to grading). One battery per grove; 8 groves ≈ two mornings per season.
+
+### P2 · Ancient-tree orbits (single-lens 4K/60)
+For the flagged ancient trees: a slow 360° orbit at 3–5 m radius, camera on the crown, ~45 s per tree. These are biography footage. Extract 2–4 stills per tree (§5) and upload them **with the tree's code** — they land confirmed and audited like any explicit capture.
+
+### P3 · Inspection sorties (on demand)
+- **Canopy-top checks** when a tree's ground photos or the review queue raise a question — hover 3–5 m above the crown, single-lens, slow tilt-down.
+- **Storm patrol** after typed heavy-rain events: fly the sanasil terrace lines (the Sanasil rule already carries 360 evidence rows) looking for wall slumps and gully cuts.
+- Findings → tree observation (category `pest`/`disease`/`damage`/`structure`, severity, note) + the extracted still uploaded with the tree code and matching purpose tag.
+
+### P4 · Harvest & heritage documentation (Oct–Nov)
+Crew at work, nets, the press runs — the footage future generations will actually watch. 360 mode, fly among (not over) people only with their knowledge, and keep a respectful distance.
+
+---
+
+## 4. How to fly for comparability (no waypoints ⇒ discipline)
+
+Because the Avata 360 cannot fly a saved mission, repeatability is procedural:
+
+1. **Fixed launch points** — one per grove, physically obvious (gate post, terrace corner). Record them once in the flight log.
+2. **Fixed numbers** — 25 m pass altitude, rows-aligned lawnmower, ~2 m/s. Same every season.
+3. **Morning calm** — Galilee wind picks up midday; the cinewhoop wobbles in gusts. Golden hour is prettier; **consistent late-morning light is more comparable**. Pick one convention per program and keep it (suggested: P1 late morning, P2/P4 golden hour, P3 whenever needed).
+4. **One flight log line per flight** (in `flights.csv` at the archive root): `date, grove_code, program (P1–P4), battery_used, cards, wind, notes`. Thirty seconds of typing that makes the archive navigable in 2040.
+
+---
+
+## 5. Post-processing pipeline
+
+The 360 file is the *negative*; nothing enters the platform until it is developed.
+
+1. **Offload same day** — copy internal + microSD to the archive SSD (§6), verify file count and total size against the drone, then format cards in-drone. Never leave the only copy on a card in a bag.
+2. **Cull** — delete aborted takes immediately. 8K/60 hoarding is how archives die.
+3. **Reframe in DJI Studio** — for each keeper produce:
+   - a **flat 4K "record cut"** (H.265) — the watchable version of the pass/orbit;
+   - **stills** of individual trees or damage (JPEG export, highest quality).
+4. **Ingest stills into the platform** — upload via `/photos/upload` **with the tree code typed** (capture-override). Reframed exports carry no usable GPS EXIF, and that's fine: *explicit identity beats GPS* is already the platform's strongest matching path. Tag purpose (`growth`, `pest`, `disease`, `damage`, `general`). Grove-level stills with no single subject stay in the archive, named by grove code.
+5. **Log observations** — anything actionable seen in footage becomes a tree observation through the normal flow. The observation is the record; the still is its evidence.
+6. **Keep originals** — the 360 master is re-frameable forever; a 2026 flythrough re-framed in 2036 toward a tree we only later learned to worry about is the whole point of shooting 360.
+
+---
+
+## 6. Storage architecture
+
+Drone raw footage must **never** enter `uploads/` (that's the curated photo corpus: media-id filenames, rsync-mirrored, quarantine-protected — see [BACKUP.md](BACKUP.md)) and cannot ride the iCloud path (quota is already tight for photos alone).
+
+**Budget** (verify GB/min on first flight): one battery of 8K/60 ≈ 15–25 GB raw → a full P1 season (8 groves) ≈ **150–250 GB raw** + ~10 GB of record cuts → ≈ **1 TB/year** all-in.
+
+**Layout** — dedicated external SSD, `GroveArchive/drone/`:
+
+```
+drone/
+├── flights.csv                          # the flight log (§4)
+├── 2026-10-05_MORAN_P1/
+│   ├── raw/                             # untouched 360 masters + sidecar files
+│   ├── exports/                         # flat 4K record cuts
+│   └── stills/                          # what was extracted (copies also uploaded)
+└── 2026-10-05_THOELIEB_P1/ …
+```
+
+**Redundancy rule — no single copy, ever:**
+
+| Tier | Medium | What | Retention |
+| --- | --- | --- | --- |
+| Working | Archive SSD | everything | permanent |
+| Cold | Second HDD, updated after each flight day, stored in a different building | `raw/` + `flights.csv` | permanent |
+| Platform | `uploads/` via normal photo upload | curated stills only | rides the existing DB+uploads backup |
+| Optional cloud | only `exports/` (small) if quota ever allows | record cuts | best-effort |
+
+The platform's daily backup remains untouched by design — drone masters are an archive concern, not a database concern. The stills that matter to tree biographies enter the corpus through the front door and are protected like every other photo.
+
+---
+
+## 7. Legal & safety (before the first grove flight)
+
+- **455 g means regulated.** This is not a toy-class drone anywhere. Verify with the Israel Civil Aviation Authority (CAAI / רת״א) what applies to a 455 g drone over your own agricultural land: registration, operator certificate, insurance, and any Northern-District airspace restrictions around Rameh. Check the CAAI drone map/app for the estate's coordinates before assuming the groves are clear. **Do this before flight one; none of it is optional at this weight.**
+- **VLOS only.** The goggles are immersive; estate practice is a spotter or goggles-off line-of-sight flying. O4's 20 km range is a spec, not an invitation.
+- **People:** no overflight of the harvest crew; P4 filming is announced and consented.
+- **Batteries:** store at ~50–60 % charge, never in a hot car; Galilee summer heat is the battery's enemy (rated to 40 °C).
+- **Lens covers:** the 360 lenses protrude and are the drone's most fragile point (replacement covers are cheap — keep two in the bag). Olive branches beat prop guards: fly *above* and *beside* canopy, enter gaps only when calm.
+
+---
+
+## 8. What would make this better later (not now)
+
+- **Video as a first-class media kind** — the `media` table ingests photos only; record cuts are linked today by filename convention in the archive. A `kind='video'` ingest is a plausible Phase-1+ item if the archive proves its worth.
+- **A `drone` context on photos** — stills currently use the standard purpose tags, which is sufficient; a capture-context column would only matter if drone stills someday need excluding from ground-photo evals.
+- **The real mapping flight** — unchanged from §3.4: RTK GNSS + GCP'd nadir mission (different aircraft) + WebODM when the registry needs re-imaging. The Avata 360 does not retire that line item.

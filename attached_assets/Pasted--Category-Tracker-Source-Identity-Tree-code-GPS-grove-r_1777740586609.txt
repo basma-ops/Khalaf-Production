@@ -1,0 +1,173 @@
+| Category | Tracker | Source |
+| --- | --- | --- |
+| **Identity** | Tree code, GPS, grove, row/position (optional), variety, age estimate, ancient status, planting date if known | Registry |
+| | Field tag (durable code, optional QR) | Registry |
+| | Photos over time (geotagged, timestamped) | Photo timeline |
+| **Geometry & growth** | Trunk diameter (mm) at standard height — measured annually | Field measurement |
+| | Canopy diameter (m) | Field measurement, twice yearly (pre/post pruning) |
+| | Tree height (m) | Field measurement |
+| | Crown polygon and crown area (m²) | Satellite-derived, field-correctable |
+| | Crown volume estimate | Computed |
+| **Phenology** | Current BBCH stage | Field observation |
+| | Date of bud break, flowering, fruit set, veraison for this tree (when individually noted) | Calendar |
+| **Health & stress** | Latest health index (0–100) | Computed from satellite + field |
+| | Visible stress signs (drought, chlorosis, leaf curl, dieback) | Field visit |
+| | NDVI / GNDVI / SAVI per imagery date | Satellite import |
+| **Pest & disease** | Pest signs found (species, severity, date) | Scouting record |
+| | Disease signs found (peacock spot, verticillium, knot, anthracnose) | Scouting record |
+| | Treatments applied (when tree-specific) | Treatment log |
+| **Operations** | Pruning history (date, type, severity) | Activity log |
+| | Pruning need flag | Field visit |
+| | Damage events (broken branch, lightning, animal, mechanical) | Incident record |
+| **Yield** | Harvest events per season | Harvest module |
+| | Boxes per harvest event, weight per box | Harvest module |
+| | Estimated yield (kg) per season | Computed |
+| | Multi-year yield trend, alternate bearing pattern | Computed |
+| | Maturity index at harvest (sampled per tree or per zone) | Sampling record |
+| **Inputs** (when tree-specific) | Foliar applications | Treatment log |
+| | Soil amendments | Treatment log |
+| **Lab** (rare, only when tree-sampled) | Tree-specific oil quality | Lab module |
+| **Notes & status** | Verification status (`unverified / field-verified / disputed / removed`) | Field visit |
+| | Free-text notes | Anywhere |
+| **Sensors (Phase 2)** | Trunk dendrometer readings (water stress indicator) | Sensor stream |
+| | Tree-mounted camera frames | Sensor stream |
+| | Nearby soil moisture (linked) | Sensor stream |
+
+---
+
+## 6. Modules
+
+The trackers in §5 are populated through these modules.
+
+### 6.1 Grove Registry
+Boundary geometry, area, slope, orientation, terraces, soil profile, planting layout, heritage notes (cultivar, family history, terrace style, age estimate). Aggregate counts and status surfaces.
+
+### 6.2 Tree Registry
+Searchable index of every tree. Tree detail page is the heart of the product:
+
+- Map with tree highlighted in grove context.
+- Photo timeline (geotagged, dated; swipeable).
+- Geometry & growth (trunk diameter, canopy, height) trended.
+- Phenology timeline.
+- Health index trend with annotations (pest finds, treatments, drought events).
+- Field visits list.
+- Pest & disease finds list.
+- Treatment log.
+- Harvest history (boxes, weight, year-over-year, batches it joined).
+- Sensor readings panel (Phase 2).
+- Heritage rule evidence linkage.
+- Notes and tags.
+
+**Tree types:** olive, fig, carob, other, unknown. Fig and carob coexist with olives because of trap-tree and soil-partner heritage rules.
+
+**Field identification:** GPS proximity match (default radius 5 m) + manual confirmation against the latest photo. Optional `field_tag` for QR or painted code.
+
+### 6.3 Photo Library
+Photos are first-class. Every photo is associated with:
+
+- A tree (or grove, or zone).
+- A timestamp.
+- GPS at time of capture (when available).
+- A purpose tag (`general`, `pre_harvest`, `box`, `pest`, `disease`, `damage`, `pruning_before`, `pruning_after`, `growth`).
+- An optional linked entity (visit, harvest event, scouting record, treatment).
+
+**Browse modes:**
+- Per-tree timeline (default tree page).
+- Latest photos across the estate (manager Today view).
+- Filter by purpose tag (`pest`, `disease`, etc.) for review and AI-assisted triage later.
+
+**On capture:** EXIF GPS and timestamp extracted, original retained, 512px thumbnail generated, photo stored against the tree before any other field-form work — this protects the most-valuable artefact even if the worker abandons the form.
+
+### 6.4 Phenology & Calendar
+A grove-year calendar showing the BBCH stages and the events that bound them: first rain, bud break, flowering, fruit set, pit hardening, veraison, maturity sampling, harvest start, harvest end, last pressing, lab result returns.
+
+- Manager logs events as they happen (one tap from the Today view).
+- Multi-year overlay shows whether stages are arriving earlier/later — direct climate-adaptation signal.
+
+### 6.5 Field Activity Log
+What was done, where, by whom, when. Activity types include:
+
+- Pruning (light / structural / heavy)
+- Mowing / understory management
+- Terrace repair
+- Stone work / drainage
+- Cover crop seeding
+- Tree planting / replanting
+- Tree removal
+- Inspection / scouting
+- Cleaning / clearing
+- Damage assessment
+- Other (free-text)
+
+Each activity captures: type · date · grove · trees affected (single, list, or "all in zone") · duration · workers · notes · optional photos. Activity records feed Year-view "what happened this season" and the heritage evidence loop.
+
+### 6.6 Pest & Disease Scouting
+A targeted form for the olive pest and disease set:
+
+| Pest / disease | Scouting cue | Treatment relevance |
+| --- | --- | --- |
+| Olive fruit fly (*Bactrocera oleae*) | Trap counts; sting marks on fruit | Threshold-based treatment, harvest timing |
+| Peacock spot (*Spilocaea oleagina*) | Dark circular spots on leaves; defoliation | Copper sprays, prune for airflow |
+| Verticillium wilt | Wilting, yellowing, vascular browning | Soil management, tolerant cultivars |
+| Olive moth (*Prays oleae*) | 3 generations: leaf, flower, fruit | Pheromone monitoring, BT treatments |
+| Olive knot (*Pseudomonas savastanoi*) | Galls on twigs after wounds | Prune in dry weather, disinfect tools |
+| Anthracnose (*Colletotrichum*) | Sunken spots on ripening fruit | Pre-harvest copper, harvest timing |
+| Black scale | Sticky honeydew, sooty mould | Biological control |
+| Olive psyllid | White waxy secretions | Monitor; rarely needs treatment |
+| Other / unknown | Photo + notes | Manager review |
+
+**Scouting record:** date · scout · grove · trees inspected (sample list or zone) · pest/disease · severity (`none|trace|low|moderate|high|severe`) · % affected · photos · recommended action · linked treatment.
+
+**Trap module (olive fruit fly):**
+- Place trap → assign to grove and location.
+- Weekly count entry (mobile, one number + optional photo).
+- Threshold alert when counts cross configurable level.
+- Phase 2: IoT trap counter replaces manual count.
+
+### 6.7 Spray & Fertilizer Records (inputs log)
+Every chemical, fertilizer, or biological input applied. Compliance-ready format:
+
+- Product (registered name, active ingredient).
+- Rate (per ha or per tree).
+- Area / trees treated.
+- Method (foliar, soil, drip, dust).
+- Date, applicator, weather conditions.
+- Withholding interval (days to harvest).
+- Notes.
+- Photos (optional; useful for label compliance).
+
+A pre-harvest withholding-period checker warns if any treated grove or tree falls inside its withholding window when a harvest is planned.
+
+### 6.8 Water & Climate
+Daily rainfall log (manual until weather station arrives). Annual cumulative, compared to long-term average. Irrigation events for any non-Ba'al grove (zero by design for Ba'al). First-rain marker. Heat events flagged.
+
+### 6.9 Harvest
+Tree-level harvest workflow (preserved from the previous draft):
+
+1. Worker selects tree (GPS-assisted).
+2. Confirms tree identity against last photo.
+3. Captures pre-harvest tree photo.
+4. Selects workers involved.
+5. Starts harvest event.
+6. Adds boxes one by one — each with photo and estimated/measured weight.
+7. Optionally samples 100 olives for **Jaén maturity index** (0–7).
+8. Completes tree harvest.
+9. Boxes are added to a batch.
+
+**Harvest event data:** season · grove · tree · date · status · start/end time · workers · pre-harvest photo · fruit condition · pest damage notes · box count · est weight · measured weight · maturity index (when sampled) · notes.
+
+**Box data:** code · sequence · photo · est weight · measured weight · fruit quality (`A|B|C`) · notes. A box belongs to exactly one harvest event and at most one batch.
+
+### 6.10 Batch, Pressing & Oil
+**Batch:** code · season · grove (when single-grove) · date · status (`open → sent_to_press → pressed → lab_sampled → completed`) · included boxes · totals.
+
+**Pressing run:** mill · pressing start time · pressing completion time · **pressing delay** (computed: pressing start − last box collection time in batch) · input weight · output litres · oil yield % · temperature · notes. *Pressing delay is the operational measure for the Press-Within-Hours rule.*
+
+**Oil batch:** code · pressing run · volume · storage container · status (`stored|bottled|sold|lab_sampled`) · notes.
+
+### 6.11 Lab Results
+**Default attribution: oil-batch level.** Tree-level only when tree-specific sampling occurred — and the UI always shows the level.
+
+Captured fields: free acidity (% oleic acid) · peroxide value · K232 · K270 · ΔK · total polyphenols · oleocanthal · oleacein · fatty acid composition · lab name · sample date · report PDF.
+
+**Derived flags:** extra virgin (`acidity ≤ 0.8%`) · health-claim eligible polyphenols (`≥ 250 mg/kg hydroxytyrosol and derivatives`).

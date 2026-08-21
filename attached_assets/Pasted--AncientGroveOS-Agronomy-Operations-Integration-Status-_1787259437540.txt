@@ -1,0 +1,1005 @@
+# AncientGroveOS — Agronomy Operations Integration
+
+> **Status:** Proposed v1.1 design; not yet implemented.
+> **Basis:** `ARCHITECTURE.md` v1.0, `XFARM_REUSE.md`, and the 2026 olive agronomy guides supplied for flowering pests, shot berries, olive fly, bark/branch pests, leaf sampling, weed resistance, and mechanical harvest.
+> **Placement:** Suggested repo path: `docs/AGRONOMY_OPERATIONS.md`.
+
+## 1. Decision summary
+
+The new agronomy functionality should **extend AncientGroveOS**, not become a separate app or a second database.
+
+The existing architectural convictions remain unchanged:
+
+1. Postgres/PostGIS is the system of record.
+2. Trees remain durable individuals, identified publicly by stable tree codes rather than database UUIDs.
+3. Derived signals remain explicitly differentiated from field observations, agronomist confirmation, and laboratory confirmation.
+4. Every mutation remains auditable.
+5. The application remains single-estate software; no multi-farm tenancy, subscription tiers, fleet integrations, or generic agtech marketplace abstractions are added.
+
+The core new operating loop is:
+
+```text
+protocol + weather + phenology
+        ↓
+planned activity / advisory
+        ↓
+field observation or measurement
+        ↓
+incident or normal finding
+        ↓
+expert review and approved action
+        ↓
+execution record
+        ↓
+follow-up observation, yield, lab, or harvest result
+        ↓
+evidence linked to the tree, grove, and heritage rule
+```
+
+## 2. Critical distinctions
+
+### 2.1 `audit_events` is not the farm notebook
+
+`audit_events` remains the immutable technical change log: who changed a row, when, and before/after values.
+
+A new `activities` table becomes the operational notebook: scouting, pruning, trap service, sampling, spraying, irrigation, harvest testing, harvesting, sanitation, and recommendations.
+
+A new `field_observations` table stores what was actually seen or measured.
+
+The user-facing tree timeline should therefore have two views:
+
+- **Operational history:** activities, observations, incidents, samples, treatments, harvests.
+- **Change log:** underlying `audit_events`.
+
+### 2.2 Heritage rules are not agronomy protocols
+
+`heritage_rules` remain inherited practices or hypotheses whose evidence can accumulate over years.
+
+New `agronomy_protocols` represent versioned source guidance: authority, publication date, jurisdiction, validity, machine-readable triggers, required evidence, and hard stops.
+
+A completed activity, observation, laboratory result, or harvest test may create a `rule_evidence` link when it supports, contradicts, or contextualizes a heritage rule.
+
+### 2.3 A recommendation is not a diagnosis
+
+The system must keep these states distinct:
+
+```text
+MODEL_SUGGESTED
+FIELD_OBSERVED
+AGRONOMIST_SUSPECTED
+AGRONOMIST_CONFIRMED
+LAB_CONFIRMED
+OUTCOME_SUPPORTED
+CLOSED_UNCONFIRMED
+```
+
+Satellite and visual models can create an investigation task. They cannot silently promote an incident to confirmed disease or create a chemical application.
+
+## 3. Reuse from the current repo
+
+| Existing subsystem | Reuse for agronomy operations |
+|---|---|
+| `groves`, `trees`, PostGIS geometry | Spatial anchor for every zone, task, trap, incident, treatment polygon, sample, and harvest record |
+| Stable tree `code` | QR/NFC identity and offline payload reference; never expose reseed-unstable UUIDs to field users |
+| `media` + upload/review pipeline | Reuse for observation photos, trap photos, sample photos, before/after treatment, harvest injury, and diagnostic capture |
+| `audit_events` | Continue as append-only mutation audit for every new write path |
+| `heritage_rules` + `rule_evidence` | Link new operational outcomes to inherited practices |
+| `grove_weather_daily`, summaries, events | Derive GDD, flowering heat exposure, rainfall constraints, dry-spell context, and historical baselines |
+| `manager/map` + MapAdapter | Add management zones, incidents, traps, treatments, and harvest-readiness layers without coupling pages to Leaflet or Google |
+| `AlertLayer` stub | Implement from open incidents, overdue activities, and protocol-generated advisories |
+| `HarvestStatusLayer` stub | Implement from readiness tests and per-tree shaker eligibility |
+| `/field` stub | Convert into the mobile field work queue and guided capture UI |
+| Server actions + Zod + domain DB modules | Preserve for all online mutations |
+| CLI scripts | Preserve for protocol seeding, weather updates, GDD derivation, and bulk imports |
+
+## 4. Data-model delta
+
+The design below is intentionally single-estate and avoids a generic SaaS ontology.
+
+### 4.1 Migration A — operational kernel
+
+#### `management_zones`
+
+Purpose: a homogeneous operational unit inside a grove for scouting, sampling, treatments, harvest, soil, or heritage protection.
+
+Core fields:
+
+```text
+id uuid primary key
+code text unique not null
+grove_id uuid references groves
+name text not null
+zone_type enum(management, sampling, treatment, harvest, heritage_protection)
+boundary geometry(MultiPolygon, 4326) not null
+active boolean default true
+attributes jsonb
+created_at / updated_at
+```
+
+Do not assign trees by fragile imported UUID. Derive membership spatially with `ST_Contains`, and cache only if performance later requires it.
+
+#### `agronomy_protocols`
+
+Purpose: versioned provenance for official guidance and estate-specific protocols.
+
+```text
+id uuid primary key
+slug text not null
+version text not null
+title text not null
+topic text not null
+authority text
+jurisdiction text
+source_date date
+valid_from / valid_until date
+status enum(draft, active, superseded, reference_only, registration_check_required)
+source_path text
+source_url text
+content_hash text
+machine_rules jsonb
+notes text
+unique(slug, version)
+```
+
+`machine_rules` may contain triggers and checklists, but executable code remains in tested TypeScript functions. The JSON records configuration and provenance; it does not become an unrestricted scripting language.
+
+#### `phenology_observations`
+
+```text
+id uuid primary key
+grove_id uuid not null
+zone_id uuid
+ tree_id uuid
+stage enum(dormant, bud_break, inflorescence_emergence, early_bloom,
+           full_bloom, petal_fall, fruit_set, pit_hardening,
+           oil_accumulation, veraison, harvest_ready, post_harvest)
+observed_at timestamptz not null
+source enum(field, model_suggested, model_confirmed)
+confidence numeric
+media_id uuid
+observer_id uuid
+notes text
+```
+
+A model suggestion cannot replace a field-confirmed stage for treatment or sampling gates.
+
+#### `activities`
+
+This is both the planned work queue and completed farm notebook.
+
+```text
+id uuid primary key
+client_event_id uuid unique            -- safe offline replay
+kind enum(recommendation, scout, prune, irrigate, fertilize, spray,
+          trap_install, trap_service, sample_collect, sanitation,
+          harvest_test, harvest, follow_up)
+status enum(planned, in_progress, completed, skipped, cancelled, dismissed)
+source enum(manual, protocol, advisory, imported)
+grove_id uuid not null
+zone_id uuid
+ tree_id uuid
+incident_id uuid
+protocol_id uuid
+assigned_to uuid
+due_at timestamptz
+started_at timestamptz
+completed_at timestamptz
+geometry geometry(Geometry, 4326)
+summary text not null
+details jsonb
+created_by uuid
+created_at / updated_at
+```
+
+Use one activity for a zone-level operation. Create per-tree activities only when the action or outcome genuinely differs by tree.
+
+> **Reuse note (ALTERNATIVES_REUSE §3.1):** the activities/observations split mirrors farmOS's Assets-vs-Logs model, and we adopt their log-geometry pattern: a completed activity carrying geometry may update the referenced zone/tree geometry **through one audited path** (never as a side effect) — e.g. a boundary-walk activity refreshing a management-zone polygon.
+
+#### `agronomy_incidents`
+
+```text
+id uuid primary key
+code text unique not null
+issue_code text not null
+grove_id uuid not null
+zone_id uuid
+ tree_id uuid
+first_observed_at timestamptz not null
+status enum(open, monitoring, action_required, treated, resolved, closed_unconfirmed)
+confirmation_level enum(model_suggested, field_observed, agronomist_suspected,
+                        agronomist_confirmed, lab_confirmed, outcome_supported)
+severity enum(trace, low, moderate, high, critical)
+suspected_cause text
+primary_protocol_id uuid
+opened_by uuid
+resolved_at timestamptz
+summary text
+```
+
+#### `field_observations`
+
+```text
+id uuid primary key
+client_event_id uuid unique
+activity_id uuid
+incident_id uuid
+grove_id uuid not null
+zone_id uuid
+ tree_id uuid
+observation_type enum(phenology, canopy, leaf, fruit, branch, trunk,
+                      weed, trap, weather_ground_truth, treatment_follow_up,
+                      harvest_injury, general)
+observed_at timestamptz not null
+severity enum(none, trace, low, moderate, high, critical)
+confidence numeric
+payload jsonb not null
+observer_id uuid
+created_at
+```
+
+`payload` is validated by a discriminated Zod schema keyed by `observation_type` and includes a `schemaVersion`. This permits guided forms to evolve without adding a table for every symptom while preserving typed validation at the application boundary.
+
+### 4.2 Migration B — monitoring, samples, and treatment compliance
+
+#### `traps`
+
+```text
+id uuid primary key
+code text unique not null
+grove_id uuid not null
+zone_id uuid
+host_tree_id uuid
+location geometry(Point, 4326) not null
+trap_type text not null
+purpose enum(monitoring, mass_trapping, lure_and_kill)
+manufacturer text
+installed_at timestamptz
+service_interval_days integer
+lure_replace_interval_days integer
+status enum(active, missing, damaged, removed)
+details jsonb
+```
+
+#### `trap_readings`
+
+```text
+id uuid primary key
+client_event_id uuid unique
+trap_id uuid not null
+read_at timestamptz not null
+days_exposed numeric
+male_count integer
+female_count integer
+unsexed_count integer
+non_target_count integer
+trap_condition text
+lure_condition text
+media_id uuid
+observer_id uuid
+catch_per_trap_day numeric generated/stored by mutation logic
+```
+
+The UI graphs normalized catch per trap-day, not only raw count.
+
+#### `samples`
+
+```text
+id uuid primary key
+code text unique not null
+sample_type enum(leaf_nutrition, fruit_infestation, shot_berry,
+                 soil, water, tissue_diagnostic, other)
+grove_id uuid not null
+zone_id uuid
+collected_at timestamptz
+status enum(planned, collected, packed, cooled, dispatched,
+            lab_received, complete, reviewed, invalid)
+protocol_id uuid
+collector_id uuid
+laboratory text
+chain_metadata jsonb
+notes text
+```
+
+#### `sample_tree_members`
+
+```text
+sample_id uuid
+tree_id uuid
+role enum(representative, comparison, hotspot, control)
+primary key(sample_id, tree_id)
+```
+
+#### `sample_measurements`
+
+```text
+id uuid primary key
+sample_id uuid not null
+metric_code text not null
+numeric_value numeric
+text_value text
+unit text
+method text
+reference_low numeric
+reference_high numeric
+qualifier text
+unique(sample_id, metric_code, method)
+```
+
+This supports leaf nutrients, fruit infestation, shot-berry percentage, and other laboratory or field measurements without hard-coding every analyte into the schema.
+
+> **Reuse note (ALTERNATIVES_REUSE §3.1):** this is deliberately the farmOS *Quantities* shape — `metric_code`/`numeric_value`/`unit` ≙ their proven `{measure, value, units}` triple, the best-tested generic-measurement model in open agtech. Keeping the mapping 1:1 also makes a farmOS-shaped export trivial if estate records ever go to research collaborators.
+
+#### `input_products`
+
+```text
+id uuid primary key
+commercial_name text not null
+manufacturer text
+active_ingredients jsonb
+mode_of_action jsonb             -- HRAC / IRAC / FRAC groups
+formulation text
+organic_compatibility enum(allowed, prohibited, conditional, unknown)
+notes text
+```
+
+#### `product_registrations`
+
+```text
+id uuid primary key
+product_id uuid not null
+jurisdiction text not null
+crop text not null
+target_issue text
+registration_number text
+valid_from / valid_until date
+minimum_tree_age_years numeric
+pre_or_post_emergence text
+max_rate numeric
+rate_unit text
+pre_harvest_interval_days integer
+reentry_interval_hours integer
+label_path text
+label_hash text
+status enum(current, expired, suspended, unverified)
+```
+
+A treatment cannot be approved against an `unverified`, `expired`, or missing registration.
+
+#### `treatment_applications`
+
+One-to-one child of an `activities` row whose kind is `spray`, `fertilize`, or another input application.
+
+```text
+id uuid primary key
+activity_id uuid unique not null
+product_id uuid not null
+registration_id uuid not null
+product_lot text
+rate numeric
+rate_unit text
+water_volume numeric
+water_volume_unit text
+treated_area numeric
+treated_area_unit text
+application_strategy enum(cover_spray, spot_spray, lure_and_kill,
+                          soil_application, foliar_feed, other)
+operator_id uuid
+equipment text
+weather_snapshot jsonb
+pre_harvest_hold_until date
+reentry_until timestamptz
+approval_status enum(draft, pending, approved, rejected, executed)
+approved_by uuid
+approved_at timestamptz
+```
+
+#### `weather_forecast_hourly`
+
+A local cache populated by a scheduled script; never fetched in the page request path.
+
+```text
+grove_id uuid
+forecast_time timestamptz
+temperature_c numeric
+relative_humidity numeric
+precipitation_mm numeric
+wind_speed numeric
+wind_gust numeric
+source_id uuid
+fetched_at timestamptz
+primary key(grove_id, forecast_time, source_id)
+```
+
+The UI wording remains "regional forecast estimate; field verification required."
+
+#### `gdd_accumulations`
+
+```text
+grove_id uuid
+model_code text
+biofix_date date
+observation_date date
+base_temperature_c numeric
+daily_gdd numeric
+cumulative_gdd numeric
+protocol_id uuid
+primary key(grove_id, model_code, biofix_date, observation_date)
+```
+
+GDD produces scouting prompts, not automatic treatment.
+
+### 4.3 Migration C — harvest and visual intelligence
+
+#### `harvest_readiness_tests`
+
+```text
+id uuid primary key
+client_event_id uuid unique
+grove_id uuid not null
+zone_id uuid
+performed_at timestamptz not null
+protocol_id uuid
+sample_count integer
+average_fdf_n numeric
+average_ffw_g numeric
+detachment_index numeric
+readiness enum(not_ready, borderline, ready, expert_review)
+raw_measurements jsonb
+observer_id uuid
+notes text
+```
+
+The application calculates `DI = FDF / FFW`. Thresholds are read from the versioned harvest protocol and can be adjusted for estate evidence rather than embedded permanently in UI code.
+
+#### Tree harvest eligibility fields
+
+Add to `trees`:
+
+```text
+harvest_method_preference enum(manual, trunk_shaker, branch_shaker, mixed, unknown)
+shaker_eligibility enum(unassessed, eligible, conditional, not_eligible)
+shaker_constraints jsonb
+shaker_assessed_at timestamptz
+```
+
+Ancient-tree protection and trunk condition remain visible independently from fruit readiness.
+
+#### `media_analyses` — later phase
+
+```text
+id uuid primary key
+media_id uuid not null
+analysis_type text not null
+model_name text
+model_version text
+prompt_version text
+result jsonb
+confidence numeric
+review_status enum(unreviewed, accepted, corrected, rejected)
+reviewed_by uuid
+created_at
+```
+
+AI results are stored as candidate analyses. They never overwrite the human observation or incident status.
+
+## 5. Protocol and configuration layout
+
+Suggested repository additions:
+
+```text
+docs/agronomy/
+  README.md
+  sources/
+    2026-flowering-pests.pdf
+    2026-shot-berries.pdf
+    2026-olive-fly-management.pdf
+    2026-olive-fly-chemical-options.pdf
+    2026-olive-bark-beetle.pdf
+    2026-cercospora-vs-senescence.pdf
+    2026-olive-branch-midge.pdf
+    2026-leaf-sampling.pdf
+    2026-mechanical-harvest.pdf
+    2026-weed-hrac-table.pdf-or-image
+
+config/agronomy/
+  phenology.json
+  flowering-pests.json
+  shot-berries.json
+  olive-fly.json
+  leaf-sampling.json
+  weed-resistance.json
+  harvest-readiness.json
+
+scripts/
+  seed-agronomy-protocols.ts
+  update-current-weather.ts
+  derive-gdd.ts
+```
+
+Seed protocol slugs:
+
+```text
+flowering-pests-il-2026
+shot-berries-il-2026
+olive-fly-management-il-2026
+olive-fly-chemical-options-il-2026
+olive-bark-beetle-il-2026
+cercospora-vs-senescence-il-2026
+olive-branch-midge-il-2026
+leaf-nutrition-sampling-il-2026
+mechanical-harvest-readiness-il-2026
+weed-hrac-rotation-il-2026
+```
+
+Chemical source protocols must default to `registration_check_required`. Unlicensed or explicitly illustrative treatments default to `reference_only` and cannot create an executable activity.
+
+## 6. Repository layout additions
+
+```text
+app/
+  field/
+    page.tsx                         # mobile Today queue
+    activity/[id]/page.tsx           # guided execution form
+    incident/new/page.tsx            # symptom capture wizard
+    sync/                            # optional offline client queue UI
+
+  manager/
+    operations/
+      page.tsx                       # open work, incidents, overdue tasks
+      incidents/[code]/page.tsx
+      traps/page.tsx
+      samples/page.tsx
+      treatments/page.tsx
+      harvest/page.tsx
+    protocols/page.tsx
+
+  api/
+    field/sync/route.ts              # only when offline queue is added
+    media/[id]/analysis/route.ts     # later visual intelligence
+
+components/
+  operations/
+    ActivityCard.tsx
+    ActivityForm.tsx
+    IncidentCard.tsx
+    IncidentReviewPanel.tsx
+    EvidenceChecklist.tsx
+  field/
+    CaptureWizard.tsx
+    OfflineQueueStatus.tsx
+  maps/
+    ZoneLayer.tsx
+    IncidentLayer.tsx
+    TrapLayer.tsx
+    TreatmentLayer.tsx
+    HarvestStatusLayer.tsx           # replace current stub
+    AlertLayer.tsx                   # replace current stub
+  protocols/
+    ProtocolBadge.tsx
+    ProtocolSourcePanel.tsx
+    HardStopBanner.tsx
+
+lib/
+  db/
+    zones.ts
+    protocols.ts
+    operations.ts
+    incidents.ts
+    phenology.ts
+    traps.ts
+    samples.ts
+    products.ts
+    treatments.ts
+    harvest.ts
+    advisory.ts
+  agronomy/
+    types.ts
+    phenology.ts
+    floweringPests.ts
+    shotBerries.ts
+    oliveFly.ts
+    sampling.ts
+    compliance.ts
+    harvestReadiness.ts
+  field/
+    schemas.ts
+    sync.ts
+```
+
+Each `lib/db/<domain>.ts` module follows the existing convention: all SQL for that domain, raw-row parsing at the boundary, and no inline page SQL.
+
+## 7. Existing page changes
+
+### `/`
+
+Add live cards for:
+
+- activities due today
+- overdue trap service
+- open incidents by severity
+- sampling due
+- treatment approvals pending
+- harvest zones ready/borderline
+
+### `/manager/map`
+
+Add toggles for:
+
+- management zones
+- incidents
+- traps and catch intensity
+- treatment polygons and harvest holds
+- sample locations
+- harvest readiness
+
+The existing provider adapter remains untouched; each new layer is a side-effect component using the same `MapAdapter` contract.
+
+### `/trees/[code]`
+
+Add:
+
+- current phenology and zone memberships
+- operational timeline
+- open incidents
+- latest observations and photos
+- treatments and legal harvest hold
+- sample participation and lab results
+- shaker eligibility and latest DI context
+- separate technical change log from `audit_events`
+
+### `/photos/upload` and `/api/photos/upload`
+
+Extend upload metadata:
+
+```text
+entity_type
+entity_code or entity_id
+purpose_tag
+organ
+view_type
+capture_protocol
+scale_present
+```
+
+When an explicit entity target is supplied by a guided field form, it overrides GPS auto-matching. GPS matching remains the fallback for unstructured bulk uploads. *(Implemented 2026-08-12 for trees: batch `treeCode` on the upload API/UI → confirmed link + audit + recorded GPS disagreement — task #23.)*
+
+### `/photos/review`
+
+Add separate queues for:
+
+- tree-match review
+- capture-completeness review
+- later AI-analysis review
+
+Do not place vision model output in `audit_events`; store it in `media_analyses` and create an audit entry only when a human accepts or corrects it.
+
+### `/manager/climate`
+
+Add:
+
+- current phenology by zone
+- flowering heat exposure
+- GDD model status
+- rainfall and humidity constraints
+- estimated treatment/harvest windows
+
+Current conditions must come from a scheduled local cache. The page should never call an external weather API directly.
+
+### `/manager/rules`
+
+Keep this page focused on heritage rules and evidence. Add links to operational records that created evidence, but do not merge it with the protocol library.
+
+### `/manager/protocols`
+
+New page showing:
+
+- source authority and publication date
+- active version
+- current legal status
+- machine-readable checks
+- superseded versions
+- source document
+- which activities and advisories used each version
+
+## 8. Workflow integration
+
+### 8.1 Flowering workflow
+
+Trigger: zone enters `early_bloom` or `full_bloom`.
+
+Create activities for:
+
+1. flowering-stage photo
+2. olive psyllid inspection
+3. olive moth inspection
+4. olive leaf-midge inspection
+5. heat-exposure monitoring
+6. later fruit-set follow-up
+
+The guide timing shifts with temperature and flowering, so calendar date is context rather than the primary trigger.
+
+### 8.2 Shot-berry workflow
+
+Trigger: fruit-set observation or field report.
+
+Capture:
+
+- total sampled fruit
+- normal fruit
+- shot berries
+- calculated percentage
+- fruit size/shape and seed presence
+- bloom heat exposure
+- pollination context
+- boron sample/result when available
+
+Output initially compares the result to the estate's own grove/season baseline, not an invented Souri threshold.
+
+### 8.3 Olive-fly workflow
+
+```text
+trap installed
+→ recurring service activity
+→ trap reading + photo
+→ normalized catch trend
+→ fruit sample required when risk rises
+→ incident review
+→ approved intervention or continue monitoring
+→ post-action reading and fruit follow-up
+```
+
+Raw trap count alone cannot create a spray activity.
+
+### 8.4 Leaf-sampling workflow
+
+The activity checklist enforces:
+
+- homogeneous management zone
+- representative trees
+- correct seasonal/phenological timing
+- correct leaf position and maturity
+- sample size
+- invalidating rain, irrigation, heat, or foliar treatment conditions
+- paper packaging, cooling, dispatch, and chain of custody
+
+### 8.5 Weed and treatment workflow
+
+```text
+weed observation + polygon
+→ proposed action
+→ registration and tree-age checks
+→ mode-of-action rotation check
+→ weather and harvest-hold checks
+→ agronomist approval
+→ execution
+→ follow-up observation
+```
+
+Hard stops prevent approval when registration is missing/expired, tree-age restrictions fail, harvest is inside the legal interval, or current label data is absent.
+
+### 8.6 Mechanical-harvest workflow
+
+```text
+representative fruit sample
+→ FDF and FFW measurements
+→ DI calculation
+→ zone readiness
+→ per-tree shaker eligibility
+→ contractor/weather/access gate
+→ harvest activity
+→ before/after injury and efficiency record
+```
+
+Fruit readiness and heritage-tree mechanical eligibility remain separate decisions.
+
+## 9. Advisory engine
+
+Start with tested pure functions, not ML and not a general rule DSL.
+
+Examples:
+
+```text
+shouldCreateFloweringPestScout(...)
+calculateBloomHeatExposure(...)
+shouldRequestShotBerryAssessment(...)
+calculateCatchPerTrapDay(...)
+shouldRequestFruitInfestationSample(...)
+validateLeafSampleConditions(...)
+validateTreatmentApproval(...)
+calculateDetachmentIndex(...)
+classifyHarvestReadiness(...)
+```
+
+Each function receives explicit inputs and an immutable protocol/config version and returns:
+
+```ts
+{
+  state: "no_action" | "monitor" | "task_required" | "blocked" | "expert_review",
+  reasons: string[],
+  missingEvidence: string[],
+  protocolId: string,
+  protocolVersion: string
+}
+```
+
+Advisory output is persisted as an `activities` row of kind `recommendation`, preserving both what the system advised and what the manager later chose.
+
+## 10. Security, offline operation, and identity
+
+### Auth before field deployment
+
+The current unauthenticated write surface is acceptable only on localhost. Before `/field` is opened on a phone or network:
+
+- activate the existing users/roles model
+- require a session for every route and action
+- restrict treatment approval to manager/agronomist roles
+- permit workers to complete assigned activities and submit observations
+- retain actor identity in every mutation and audit event
+
+### Stable codes
+
+QR/NFC and offline records use:
+
+```text
+tree code
+zone code
+trap code
+sample code
+incident code
+```
+
+The server resolves these to current UUIDs. This avoids broken references after reseeding.
+
+### Offline replay
+
+When offline mode is added:
+
+- client creates `client_event_id`
+- forms queue in IndexedDB
+- `/api/field/sync` accepts a batch
+- unique constraints make replay idempotent
+- media uploads retry separately
+- conflicts route to a review queue rather than overwriting silently
+
+## 11. Test requirements
+
+Before field use, add tests for:
+
+1. real unique constraints on climate daily and summary rows
+2. protocol seeding idempotency
+3. stable code resolution after reseed
+4. activity and observation audit writes
+5. duplicate offline replay rejection
+6. explicit media link overriding GPS matching
+7. phenology-gated task generation
+8. trap-day normalization
+9. no spray activity from trap count alone
+10. registration/expiry/tree-age/PHI hard stops
+11. HRAC/IRAC/FRAC rotation warning
+12. leaf-sample checklist and chain-state transitions
+13. DI formula and versioned readiness thresholds
+14. map GeoJSON excluding null geometries
+15. role restrictions for diagnosis confirmation and treatment approval
+
+## 12. Implementation sequence
+
+### Preflight hardening — before new operational data
+
+1. ✅ Make the first repository commit and establish branch discipline *(done 2026-08-08: `2cefbb4`, private GitHub `basma-ops/AncientGroveOS`)*.
+2. ✅ Fix the fake-unique climate indexes *(migration 0005; data was clean — no dedupe needed)*.
+3. ✅ Add automated database and uploads backup *(daily LaunchAgent; restore drill passed — see BACKUP.md)*.
+4. Implement authentication before network exposure.
+5. Run a tree-registry audit and reconcile the current tree total and grove counts (1,326 registered vs 1,149 planning figure). **The QField verification walk (ALTERNATIVES_REUSE §3.2) is the vehicle**: the same field campaign that verifies trees surfaces duplicates/ghosts for the reconciliation.
+6. ✅ Tag the current Phase-0 baseline *(`phase-0-baseline`)*.
+
+### Pre-PR-1 reuse tranche ✅ (built 2026-08-09)
+
+- ✅ `pnpm qfield:export` → GeoJSON layers in `field-campaigns/export/`; campaign guide in `field-campaigns/README.md` (QGIS packaging, walk protocol, sync-back)
+- ✅ `pnpm qfield:import` → dry-run-by-default: verification updates (audited; `is_missing` → `disputed`, never silent deletion) + `matching-golden.json` entries (merge-idempotent)
+- ✅ `pnpm eval:matching` (A2 benchmark) — gates activate at n ≥ 40 golden entries
+- ✅ PR 2's grove-NDVI item built ahead of schedule: `pnpm ndvi:fetch` (CDSE Statistical API, needs free registration) → `grove_ndvi_timeseries` (migration 0006) → climate-page panel with same-month-norm deviation
+- QField pressure-tests the field workflows before `/field` (PR 1) is designed; the custom app remains the Phase-1 daily-operations surface
+
+### PR 1 — operational kernel
+
+- `management_zones`
+- `agronomy_protocols`
+- `activities`
+- `field_observations`
+- `agronomy_incidents`
+- `phenology_observations`
+- domain DB modules, server actions, audit wrapper
+- `/manager/operations`
+- basic `/field` Today queue
+- `ZoneLayer` and `IncidentLayer`
+- protocol seed script
+
+**Acceptance:** a manager can create a zone, assign a scouting activity, a field user can complete it with structured observations and photos, an incident can be opened, every mutation is audited, and the record appears on the tree and map.
+
+### PR 2 — climate and phenology advisories
+
+- incremental weather update script (Open-Meteo, same source as the historical extract)
+- forecast cache (`weather_forecast_hourly`, populated from the **Open-Meteo forecast API** — one provider, one honesty register)
+- GDD accumulation
+- flowering heat exposure
+- protocol-generated scouting tasks
+- cards on `/manager/climate` and `/`
+- **grove-level NDVI time series via Copernicus openEO** (ALTERNATIVES_REUSE §3.3): scheduled script → `grove_ndvi_timeseries` table → "grove NDVI vs seasonal norm" panel beside the climate cards. Sentinel-2 is 10 m/pixel — **grove-level claims only**; per-tree remains the VHR flagship (PR 8). Wording follows the climate register: "regional optical signal; field verification required."
+
+### PR 3 — olive-fly monitoring
+
+- traps and readings
+- recurring service activities
+- photo capture
+- trend charts
+- fruit sample escalation
+- `TrapLayer`
+
+### PR 4 — samples and laboratories
+
+- samples, member trees, measurements
+- leaf sampling workflow
+- shot-berry workflow
+- chain of custody
+- result review and evidence links
+
+### PR 5 — treatments and compliance
+
+- product and registration catalog
+- treatment child records
+- approval workflow
+- weather/registration/tree-age/PHI hard stops
+- mode-of-action history
+- treatment polygons and harvest holds
+
+### PR 6 — harvest intelligence
+
+- DI capture and calculation
+- tree shaker eligibility
+- harvest readiness dashboard/layer
+- harvest activity and injury follow-up
+- economic scenario as a view, not a permanent recommendation
+
+### PR 7 — visual intelligence
+
+- capture metadata
+- `media_analyses`
+- similar-case retrieval
+- trap-assisted counting
+- guided leaf/fruit/branch differentials
+- human review gates
+
+### PR 8 — satellite time series
+
+- multi-acquisition ingest
+- per-tree historical baseline
+- cluster growth analysis
+- time slider
+- anomaly-generated scouting activities
+
+## 13. Explicitly deferred
+
+Do not build in the first operational release:
+
+- multi-farm tenancy
+- subscription or feature gating
+- full warehouse accounting
+- tractor telemetry
+- ISOBUS/VRA prescriptions
+- autonomous chemical selection
+- automatic disease confirmation
+- generic rule-builder UI
+- public consumer/tourism features
+
+## 14. Decisions that must be resolved before coding
+
+1. **Tree registry count:** the architecture document currently reports 1,326 registered trees; prior estate planning has used 1,149. Reconcile before operational records are attached permanently.
+2. **Field connectivity:** decide whether PR 1 is online-only or must include offline queueing immediately.
+3. **Approval authority:** identify the person/role allowed to confirm agronomic diagnoses and approve chemical applications.
+4. **Registration source:** define who maintains current Israeli product labels and expiry dates.
+5. **Zone design:** define the initial management-zone boundaries and naming convention.
+6. **Current pest scope:** confirm the first enabled issue codes; recommended first set is olive fly, olive psyllid, olive moth, olive leaf midge, cercospora differential, bark beetle, branch midge, shot berries, and weed pressure.
+
+---
+
+This plan deliberately preserves AncientGroveOS's current strengths—per-tree identity, provenance, local-first operation, PostGIS maps, media review, climate history, auditability, and heritage evidence—while adding the smallest coherent operational layer capable of supporting the 2026 agronomy protocols safely.

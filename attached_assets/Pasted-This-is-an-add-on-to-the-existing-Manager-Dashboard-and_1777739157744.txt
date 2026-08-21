@@ -1,0 +1,430 @@
+This is an add-on to the existing Manager Dashboard and Field Worker App.
+
+Do not rebuild the whole app.
+Do not change the core architecture.
+Keep the existing shared database, backend API, Manager Dashboard, and Field Worker App.
+
+Feature goal:
+When a field worker uploads a batch of tree photos, the system should analyze each image for structured visual quality and grove-health indicators. These results should be saved as draft AI-assisted observations, reviewed by the manager, and connected to trees, field visits, monitoring tasks, harvest events, and heritage-rule evidence.
+
+Important:
+The system must not claim final diagnosis from photos.
+Use cautious language:
+- visible stress signal
+- possible pruning need
+- possible drought stress
+- possible pest/damage sign
+- needs field verification
+- low-confidence image
+Do not say:
+- disease confirmed
+- pest confirmed
+- tree is dying
+- exact yield predicted
+
+This feature should support both:
+1. Monitoring Mode
+Used throughout the year for tree health, pruning, drought, pest signs, terrace/soil/root exposure, and general condition tracking.
+
+2. Harvest Mode
+Used during harvest season for pre-harvest tree photos and optional box photo analysis.
+
+Also add a test workflow for my first 16 tree pictures.
+
+I will upload or place 16 real tree photos for testing.
+Use only those real images for testing.
+Do not create synthetic test images.
+
+Add database tables:
+
+photo_batches
+- id
+- batch_code
+- context: monitoring, harvest_pre_tree, harvest_box, general_tree_review
+- grove_id nullable
+- tree_id nullable
+- task_id nullable
+- field_visit_id nullable
+- harvest_event_id nullable
+- uploaded_by_user_id nullable
+- status: draft, uploaded, analyzing, analyzed, reviewed, failed
+- title nullable
+- notes nullable
+- created_at
+- updated_at
+
+photo_batch_items
+- id
+- photo_batch_id
+- media_id
+- sequence_number
+- original_file_name nullable
+- status: uploaded, analyzing, analyzed, failed
+- created_at
+
+photo_analysis_jobs
+- id
+- photo_batch_id
+- status: queued, running, completed, failed
+- provider: local_heuristic, external_vision_model, manual_only
+- model_name nullable
+- model_version nullable
+- started_at nullable
+- completed_at nullable
+- error_message nullable
+- created_by_user_id nullable
+- created_at
+
+photo_analysis_results
+- id
+- photo_analysis_job_id
+- photo_batch_item_id
+- media_id
+- grove_id nullable
+- tree_id nullable
+- task_id nullable
+- field_visit_id nullable
+- harvest_event_id nullable
+- context: monitoring, harvest_pre_tree, harvest_box, general_tree_review
+- photo_quality_score nullable
+- blur_score nullable
+- exposure_score nullable
+- lighting_quality nullable
+- tree_visible boolean nullable
+- tree_centered boolean nullable
+- obstruction_detected boolean nullable
+- duplicate_or_near_duplicate boolean nullable
+- gps_metadata_present boolean nullable
+- capture_angle nullable
+- canopy_density_score nullable
+- canopy_greenness_score nullable
+- yellowing_or_browning_score nullable
+- dead_branch_visibility nullable
+- drought_stress_visual_signal nullable
+- pruning_need_score nullable
+- pest_or_disease_visual_signal nullable
+- trunk_condition_signal nullable
+- root_exposure_signal nullable
+- understory_visibility nullable
+- terrace_or_soil_risk_visible nullable
+- fruit_set_visible_score nullable
+- pre_harvest_documentation_quality nullable
+- fruit_load_visible_score nullable
+- fruit_maturity_visual_score nullable
+- fruit_color_distribution_json nullable
+- visible_pest_damage_on_fruit nullable
+- visible_shriveling_or_dry_fruit nullable
+- harvest_readiness_visual_signal nullable
+- box_visible boolean nullable
+- fruit_visible boolean nullable
+- box_fill_level_estimate nullable
+- fruit_quality_visual_score nullable
+- visible_leaf_or_debris_level nullable
+- visible_damaged_fruit_signal nullable
+- confidence_score nullable
+- recommended_follow_up nullable
+- recommended_task_type nullable
+- summary nullable
+- limitations nullable
+- raw_analysis_json
+- review_status: draft, manager_confirmed, manager_rejected, needs_field_verification
+- reviewed_by_user_id nullable
+- reviewed_at nullable
+- created_at
+
+Update existing media table if needed:
+- add purpose/context fields if useful
+- preserve file_url, entity_type, entity_id, uploaded_by_user_id, uploaded_at
+
+Manager Dashboard additions:
+
+Add route:
+/manager/photo-analysis
+
+Page: Photo Analysis Center
+
+Features:
+1. Upload or select a batch of real tree photos.
+2. Create photo batch.
+3. Choose context:
+   - Monitoring
+   - Harvest pre-tree photo
+   - Harvest box photo
+   - General tree review
+4. Optionally link the photo batch to:
+   - grove
+   - tree
+   - task
+   - field visit
+   - harvest event
+5. Run analysis.
+6. Show analysis status.
+7. Show gallery of photos.
+8. For each photo, show:
+   - image preview
+   - photo quality score
+   - tree visibility
+   - canopy density
+   - greenness/yellowing
+   - possible drought stress signal
+   - possible pruning need
+   - possible pest/damage signal
+   - harvest readiness signal if harvest context
+   - confidence score
+   - limitations
+   - recommended follow-up
+9. Allow manager to:
+   - confirm result
+   - reject result
+   - mark needs field verification
+   - create task from result
+   - link result to heritage rule evidence
+   - add notes
+
+Add route:
+/manager/photo-analysis/test
+
+Purpose:
+Allow me to upload or load my first 16 real tree pictures and run the analysis as a test batch.
+
+The test page should:
+- accept multiple image uploads
+- create one photo_batch with context general_tree_review or monitoring
+- run analysis
+- show a grid of all 16 photos
+- show extracted metrics per image
+- show an aggregate summary:
+  - number of usable photos
+  - number of low-quality photos
+  - number with visible canopy stress signals
+  - number with possible pruning need
+  - number with possible pest/damage signals
+  - number needing field verification
+- allow exporting results as CSV/JSON
+
+Manager Tree Detail additions:
+/manager/trees/[id]
+
+Add tab:
+Photos & Visual Analysis
+
+Show:
+- all uploaded photos linked to the tree
+- analysis results over time
+- manager review status
+- visual health timeline if enough results exist
+- tasks created from photo analysis
+
+Field Worker App additions:
+
+Monitoring Mode:
+When worker is completing a monitoring task or field visit, allow:
+- upload one or many tree photos
+- create photo_batch linked to the task/field_visit/tree
+- submit photos
+- show “analysis pending” after upload
+- optionally show simple result if analysis completes quickly
+- do not require worker to interpret AI output
+
+Harvest Mode:
+During Start Tree Harvest:
+- pre-harvest tree photo upload already exists
+- after upload, create a photo_batch with context harvest_pre_tree
+- analyze for:
+  - photo documentation quality
+  - tree visible
+  - fruit load visible
+  - fruit maturity visual signal
+  - visible pest/damage signs
+  - harvest readiness visual signal
+- store results linked to harvest_event and tree
+
+During Complete Tree Harvest / Add Boxes:
+- for each box photo, optionally analyze with context harvest_box
+- analyze for:
+  - box visible
+  - fruit visible
+  - fill level estimate
+  - visible damaged fruit signal
+  - leaf/debris visibility
+  - photo quality
+- store results linked to harvest_box and harvest_event
+
+Backend/API requirements:
+
+Add API routes or server actions for:
+- create photo batch
+- upload photo batch items
+- list photo batches
+- get photo batch detail
+- run photo analysis
+- get photo analysis job status
+- get photo analysis results
+- manager review analysis result
+- create task from analysis result
+- export photo analysis batch as CSV/JSON
+
+Analysis implementation:
+
+Implement a provider-agnostic photo analysis service.
+
+Create:
+lib/photo-analysis/analyzePhoto.ts
+lib/photo-analysis/analyzeBatch.ts
+lib/photo-analysis/prompts.ts
+lib/photo-analysis/schema.ts
+
+The service should support:
+1. local_heuristic mode
+2. external_vision_model mode if an API key/model is configured
+3. manual_only fallback
+
+If no external vision model is configured:
+- still store photos
+- still calculate basic image quality if possible:
+  - blur score
+  - image dimensions
+  - exposure/brightness
+  - file metadata
+- mark agricultural analysis as unavailable
+- show empty states and “vision model not configured”
+
+If an external vision model is configured:
+- send the image with a strict JSON schema
+- ask for cautious visual observations only
+- store model output in raw_analysis_json
+- parse into structured fields
+- never treat the model output as confirmed diagnosis
+
+Create a JSON schema for vision output like:
+
+{
+  "photo_quality_score": 0-100,
+  "tree_visible": true/false/null,
+  "tree_centered": true/false/null,
+  "lighting_quality": "good|medium|poor|unknown",
+  "obstruction_detected": true/false/null,
+  "canopy_density_score": 0-100/null,
+  "canopy_greenness_score": 0-100/null,
+  "yellowing_or_browning_score": 0-100/null,
+  "dead_branch_visibility": "none|low|medium|high|unknown",
+  "drought_stress_visual_signal": "none|low|medium|high|unknown",
+  "pruning_need_score": 0-100/null,
+  "pest_or_disease_visual_signal": "none|low|medium|high|unknown",
+  "trunk_condition_signal": "normal|watch|needs_inspection|unknown",
+  "root_exposure_signal": "none|low|medium|high|unknown",
+  "understory_visibility": "none|low|medium|high|unknown",
+  "terrace_or_soil_risk_visible": "none|low|medium|high|unknown",
+  "fruit_set_visible_score": 0-100/null,
+  "fruit_load_visible_score": 0-100/null,
+  "fruit_maturity_visual_score": 0-100/null,
+  "fruit_color_distribution": {
+    "green_percent": null,
+    "turning_percent": null,
+    "purple_black_percent": null,
+    "unknown_percent": null
+  },
+  "visible_pest_damage_on_fruit": "none|low|medium|high|unknown",
+  "visible_shriveling_or_dry_fruit": "none|low|medium|high|unknown",
+  "harvest_readiness_visual_signal": "not_ready|monitor|possibly_ready|ready|unknown",
+  "box_visible": true/false/null,
+  "fruit_visible": true/false/null,
+  "box_fill_level_estimate": "empty|low|medium|full|unknown",
+  "fruit_quality_visual_score": 0-100/null,
+  "visible_leaf_or_debris_level": "none|low|medium|high|unknown",
+  "visible_damaged_fruit_signal": "none|low|medium|high|unknown",
+  "confidence_score": 0-100,
+  "summary": "short cautious summary",
+  "limitations": "what cannot be concluded from the image",
+  "recommended_follow_up": "field verification or task recommendation",
+  "recommended_task_type": "tree_inspection|pest_check|drought_check|pruning_check|harvest_check|none"
+}
+
+Vision model instruction:
+Analyze only what is visible in the image.
+Do not infer exact disease, pest species, yield, age, or oil quality.
+Do not claim certainty.
+Use cautious language.
+If the photo is unclear, say so.
+Return valid JSON only.
+
+Task creation:
+From a photo analysis result, manager can create task types:
+- tree_inspection
+- pest_check
+- drought_check
+- pruning_check
+- harvest_check
+- terrace_check
+- understory_survey
+- other
+
+Rule evidence:
+Allow photo analysis results to be linked to heritage_rules through rule_evidence.
+
+Suggested mappings:
+- drought stress visual signal -> Ba’al Rainfed Discipline
+- fruit maturity / harvest readiness -> First Rain Rule or Late Harvest
+- pruning need -> tree stewardship / monitoring
+- pest or fruit damage signal -> Fig Trap Trees / pest monitoring
+- understory visibility -> Wild Understory
+- soil/root/terrace visible risk -> Sanasil Stone Terraces
+
+UI design:
+Keep style consistent with AncientGroveOS:
+- premium
+- earthy
+- scientific
+- field-ready
+- serious
+- not generic SaaS
+
+Photo Analysis Center layout:
+- batch list on left
+- selected batch details
+- photo gallery
+- metric chips
+- confidence badges
+- manager review controls
+- create-task buttons
+- export button
+
+Field app layout:
+- large upload buttons
+- photo thumbnails
+- simple status:
+  uploaded
+  analyzing
+  analyzed
+  needs review
+- avoid complex analytics for field workers
+
+Data trust:
+Photo analysis results are draft observations.
+Manager review is required before they affect official tree status.
+Do not automatically change current_health_index from photo analysis alone.
+Instead, create:
+- photo analysis result
+- optional suggested task
+- optional manager-reviewed update
+
+Testing:
+Add a test workflow for 16 real tree photos:
+- upload 16 images
+- run analysis
+- display results
+- export CSV/JSON
+- verify no synthetic records are created
+- verify analysis results are linked to media and photo_batch
+- verify manager can review each result
+- verify manager can create a task from a result
+
+Documentation:
+Update README and docs with:
+- how Visual Tree Intelligence works
+- how to upload a photo batch
+- how to test with 16 images
+- how manager review works
+- what the model can and cannot conclude
+- how Monitoring Mode uses photo analysis
+- how Harvest Mode uses photo analysis

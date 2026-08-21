@@ -1,0 +1,126 @@
+ — Open-Source Landscape & Reuse Decisions
+
+> **Status:** v1.0 (2026-08-08). Research verified against project sites/docs in August 2026.
+> **Companion to:** [XFARM_REUSE.md](XFARM_REUSE.md) (commercial benchmark: what xFarm teaches us) · [PLATFORM_CAPABILITIES.md](PLATFORM_CAPABILITIES.md) (what we promise) · [AGRONOMY_OPERATIONS.md](AGRONOMY_OPERATIONS.md) (the biggest unbuilt layer, where reuse questions matter most).
+> **Question this doc answers:** for each thing we plan to build, does something existing do it better — and if so, adopt it, integrate it, or borrow its patterns?
+
+---
+
+## 1. The frame: what is commodity, what is the moat
+
+From PLATFORM_CAPABILITIES, our capabilities split cleanly:
+
+- **The moat (build, nobody has this):** per-tree identity with durable codes and biographies · heritage rules with an evidence trail · the executable honesty contract (eval-gated vision, no-kg/no-diagnosis/no-irrigation-from-pixels) · Ba'al-aware advice fusion.
+- **Commodity (reuse candidates):** field data capture · generic farm record-keeping (activities/logs) · satellite imagery access and processing · drone photogrammetry · generic plant-disease classifiers · weather data (already reused: Open-Meteo).
+
+The verdicts below follow one rule: **reuse where the problem is generic; build where the honesty contract or per-tree model would be compromised.**
+
+---
+
+## 2. Comparison table
+
+Verdicts: **ADOPT** (use it) · **BORROW** (steal the pattern, not the software) · **WATCH** (revisit at a trigger) · **SKIP** (not for us).
+
+| Solution | Category | License / status (verified 2026-08) | What it does well | Fit with AncientGroveOS | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| **[farmOS](https://farmos.org/) v4** | Farm management platform | GPL, active (Drupal 11, PHP 8.4); FAO-endorsed; strong community | The reference open data model: **Assets + Logs + Quantities**, geometry on logs, movement logs update asset geometry, archived assets, freeform `data` field, sensors module, JSON:API | Could model trees as plant assets and our activities as logs — but it's a second stack (Drupal/PHP vs our TS/Postgres), field-centric conventions, and our compliance hard-stops, confirmation levels, and evidence links are custom regardless. Adopting it = running two systems, violating "the database is the product" | **BORROW** — its data-model patterns are the best-tested in open agtech; §3.1 maps them onto our AGRONOMY_OPERATIONS schema |
+| **[LiteFarm](https://www.litefarm.org/)** | Farm management (small/sustainable farms) | GPL, active (UBC-backed) | Ease of use for small farms; sustainability certifications workflow | Field-centric, simpler than what we already shipped in Phase 0; no per-tree concept | **SKIP** |
+| **[Tania](https://usetania.org/)** | Farm journal | Apache-2.0, low activity | Lightweight journal (Go + Vue) | Below our record-keeping bar already | **SKIP** |
+| **[xFarm](XFARM_REUSE.md)** | Commercial FMS (the benchmark) | Proprietary, freemium | UX patterns, module scoping, satellite/alert workflows | Already analyzed — a pattern source, not a platform choice (multi-farm SaaS, field-centric) | **BORROW** (per XFARM_REUSE) |
+| **[QField](https://qfield.org/)** | Offline field GIS capture | GPL, very active (QGIS ecosystem) | Load a QGIS project (our tree/grove GeoJSON!) onto a phone; **offline** forms + photos + GPS anchored to features; forestry/per-tree workflows are a documented use case | Directly solves three pending owner tasks: the **field-verification walk** (1,325 trees), the **staged matching benchmark** (A2), and structured capture before the `/field` app exists. Our PostGIS data round-trips via GeoPackage export/import | **ADOPT** for field campaigns (§3.2) |
+| **[Mergin Maps](https://merginmaps.com/)** | Field GIS + sync platform | AGPL core, active; hosted sync is paid | Same capture model as QField plus team sync/cloud | Sync tier is a subscription we don't need for a one-phone estate; QField covers us | **WATCH** (if multi-worker field capture arrives before our PR 1) |
+| **[ODK](https://getodk.org/) / KoboToolbox** | Structured form data collection | Open source, very active | Battle-tested survey forms, photos, GPS, offline | Form-first, not map-first — for tree-anchored capture QField wins; for the future *harvest crew* logging (Phase 2), a form tool could beat a custom app | **WATCH** (Phase 2 harvest logging) |
+| **[Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/) + [openEO](https://documentation.dataspace.copernicus.eu/notebook-samples/openeo/NDVI_Timeseries.html)** | Free satellite data + cloud processing | Free/open (EU), active | Free Sentinel-2 archive; **server-side NDVI time series per polygon** — no download, no processing infrastructure | Sentinel-2 is 10 m/pixel: an olive crown is *sub-pixel* — honest use is **grove-level trend, never per-tree**. Per-tree stays with VHR acquisitions (Pléiades-class, the existing pipeline) | **ADOPT** for grove-level NDVI time series (§3.3) |
+| **Sentinel Hub commercial APIs** | Satellite processing API | Paid tiers | Convenience over the same data | CDSE free tier covers our scale (8 polygons) | **SKIP** |
+| **[OpenDroneMap / WebODM](https://opendronemap.org/)** | Drone photogrammetry | AGPL/MPL, very active (de-facto OSS standard) | Orthomosaics, NDVI/VARI maps, DEMs, point clouds from drone photos | The processing layer for any future drone campaign — pairs with the OliveTreeCrownsDb / olive-crown-segmentation literature already in our test plan | **ADOPT-when-triggered** (first drone flight) |
+| **[PlantVillage Nuru](https://apps.apple.com/us/app/plantvillage-nuru/id1441395371)** | Open plant-disease detection | Public-good (Penn State/FAO), active | Offline on-device detection; proven ~65% accuracy on its crops | Cassava/maize/potato-class crops — **no olive coverage**; generic classifier output can't satisfy our closed-list + evidence + abstention contract | **SKIP** (pattern reference: offline-first detection UX) |
+| **[Plantix](https://plantix.net/)-class apps** | Commercial disease ID apps | Proprietary | Large crop libraries, farmer UX | Same contract mismatch: free-text diagnosis vs our routing-signal register; olive depth unverified | **SKIP** (UX reference only) |
+| **Roboflow olive-disease sets, OliVaR, OQDS-Insight, ICAERUS** | Datasets & reference models | Various open licenses | Labeled olive imagery | **Already adopted** into the eval plan (TEST_PLAN_TREE_INTELLIGENCE §5.5) as prompt-dev/benchmark tier — gates stay Khalaf-only | ADOPT (done) |
+| **Trapview-class e-traps** | Automated pest trap hardware | Proprietary hardware+SaaS | Automated olive-fly counts, photo verification | AGRONOMY PR 3 designs manual traps first (correct: protocol before hardware); e-traps slot into the same `trap_readings` table later | **WATCH** (after PR 3, if trap-servicing time becomes the bottleneck) |
+| **[Open-Meteo](https://open-meteo.com/)** | Weather/climate API | Free/open, active | ERA5 history, forecasts | **Already our climate backbone** — 45 seasons extracted; forecast cache in AGRONOMY PR 2 should use its forecast API too | ADOPT (done; extend to forecasts) |
+
+Broader index consulted: [awesome-agriculture](https://github.com/brycejohnston/awesome-agriculture).
+
+---
+
+## 3. Reuse recommendations, by decision weight
+
+### 3.1 The big one — AGRONOMY_OPERATIONS layer: build, but borrow farmOS's data model
+
+farmOS is the only serious "adopt instead of building PRs 1–8" candidate, so the decision deserves its reasoning on record:
+
+**Why not adopt:** (a) Second stack — Drupal 11/PHP beside Next/TS/Postgres breaks the single-system conviction and doubles the operational surface for a single-operator estate. (b) Our Phase 0 (registry, map, photos, climate, evidence) already exceeds what farmOS gives us out of the box for *this* estate; adopting it would mean porting the moat into a foreign platform. (c) The parts that make our ops layer valuable — registration hard-stops, confirmation levels, heritage-evidence links, the honesty register — are custom modules in *any* platform.
+
+**What to borrow (concrete, into the PR 1 schema review):**
+
+| farmOS pattern | Maps to | Adoption note |
+| --- | --- | --- |
+| Assets vs Logs separation | our entities vs `activities`/`field_observations` | Already aligned — validates the AGRONOMY split |
+| Log geometry + "is movement" updates asset geometry | activity geometry | Adopt the idea: a completed activity with geometry can update zone/tree geometry through one audited path |
+| Quantities: `{measure, value, units}` triples on any log | `sample_measurements` | Adopt the triple shape verbatim — it's the proven generic-measurement model |
+| Computed inventory from adjustment logs | future harvest/stock tracking | Keep for Phase 2 — derive stock, never store it |
+| Archived-not-deleted assets | our `active`/`removed` statuses | Already aligned |
+| Freeform `data` field on every record | our typed `details`/`payload` JSONB | We go stricter (Zod-validated discriminated payloads) — keep ours |
+
+Also worth keeping on the radar: farmOS's conventions are becoming a de-facto interchange vocabulary (FAO-endorsed) — if we ever export estate records for research collaboration, an assets/logs-shaped export is the compatible format.
+
+### 3.2 The quick win — QField for the two owner field campaigns ⭐
+
+Highest-leverage adoption available **this month**, before any PR-1 code:
+
+1. Export trees + grove boundaries to GeoPackage (one PostGIS query away).
+2. Build a QGIS project with a verification form (verified? / field tag / notes / photo) and a capture form for the staged matching walk (tree code pre-filled from the tapped feature — eliminating transcription errors in the A2 gold labels).
+3. Walk with QField offline; sync back; a ~50-line import script writes `verification_status`, audit rows, and `tests/benchmarks/matching-golden.json`.
+
+This replaces building a capture UI for the two hardest data-collection tasks on the roadmap (1,325 verifications; A2 ground truth) and pressure-tests the field workflows before we design `/field` in PR 1. The custom `/field` app remains right for Phase 1 *daily operations* (work queue, incidents — deeply tied to our tables), so QField is a bridge, not a fork.
+
+### 3.3 Satellite time series — two honest tiers instead of one build
+
+The §7 flagship ("has *this tree* declined?") stays on VHR acquisitions through the existing pipeline. But the *free* tier we weren't planning: **CDSE openEO server-side NDVI time series per grove polygon** — 8 polygons, zero processing infrastructure, weekly-ish cadence back through years. Grove-level only (10 m pixels; per-tree claims from Sentinel-2 would violate the resolution-honesty rule in `map_layers`), which makes it the *climate-style context layer* for the rules dashboard: "grove NDVI vs its 5-year seasonal norm," ~50 lines of openEO client code + one table. Recommend scheduling this as a small tranche alongside the satellite flagship design.
+
+### 3.4 Imagery behind photo→tree matching — gap analysis vs leading practice (added 2026-08-12)
+
+The auto-matcher consumes **no imagery at pixel level** — it compares phone GPS
+(median ±4.6 m, measured) against tree points/crowns derived from **one** VHR
+acquisition (pansharpened reflectance, 2026-01-22, manually reviewed;
+`resolution_m` unrecorded, **georegistration accuracy unquantified**). Every
+distance threshold silently inherits whatever absolute-alignment error that
+ortho has. How the leading solutions handle the same problem:
+
+| Leading practice | Who does it | Our gap |
+| --- | --- | --- |
+| **Identity at capture, not matching after** — tap the asset, then photograph; the link is human-made at zero cost | QField (our own campaign flow), xFarm scouting, every serious field app | Matching is our *primary* path; leading tools treat it as fallback for unstructured uploads |
+| **cm-grade registry**: GCP/RTK-corrected drone orthos → crowns with known absolute accuracy | OpenDroneMap practice, ICAERUS pipelines, MatchPlant/SeeTree-class orchard localization | Single acquisition, unknown alignment; no GCPs on record |
+| **RTK GNSS capture** (±2–5 cm, Bluetooth receiver into the phone) | QField supported workflow | Phone GPS only (±5 m — same order as tree spacing) |
+| **Visual re-ID embeddings** as the disambiguator | research-grade (SeeTree) | Pre-registered as A4; blocked on per-tree photo depth (21 trees have photos) |
+
+**Advice, in order of leverage:**
+
+1. ✅ **Identity-at-capture — built 2026-08-12 (task #23)**: `/api/photos/upload` accepts a batch `treeCode` (also a field in the upload UI) — validated, linked as `confirmed` with `method: explicit_capture`, audited, and any GPS disagreement is *recorded* (`gpsDisagreesM`) never blocking, because humans beat bad fixes. GPS matching remains the fallback for camera-roll bulk uploads — the leading-product shape.
+2. ✅ **Registry calibration — tool built 2026-08-12 (task #24)**: `pnpm calibrate:registry` aggregates human-confirmed pairs (review confirmations, explicit captures, staged-walk golden entries; outlier/bad-fix filtered) into per-grove bias vectors with standard errors — verdicts are significance-gated (n ≥ 10 AND magnitude > 2·SE AND ≥ 1 m) so GPS noise never masquerades as bias, and a detected shift prints its correction SQL without running it. First run: 1 pair, 4.5 m offset hint, honestly ⏳ insufficient — activates with the walk. Still to do by owner: fill the empty `resolution_m` on the acquisition row.
+3. **Ship the quantified promotions once A2 gold exists**: crown-promotion (auto 44→83, `pnpm sweep:matching`) and bearing-projection (bearing present on 100% of GPS photos).
+4. **RTK receiver for the field walk** (~hardware cost): turns the golden set cm-accurate and measures registry alignment as a by-product — one purchase, two birds.
+5. **At the next imagery refresh**: drone flight + WebODM **with ground control points**, crowns re-extracted (OAM-TCD/OliveTreeCrownsDb models per TEST_PLAN §5.5) — the registry side of matching stops being the unknown.
+
+### 3.5 Confirmed non-reuse — vision capabilities
+
+Nuru/Plantix-class detectors fail our contract on three axes: no olive coverage (Nuru), free-text diagnosis vs closed-list routing signals, and no abstention/evidence/eval-gating. The eval-gated Claude approach with Khalaf-only ship gates stands. External *datasets* (not models) remain the sanctioned reuse, already planned.
+
+### 3.6 Already-right reuse, reaffirmed
+
+Open-Meteo (climate backbone; extend to its forecast API for AGRONOMY PR 2's cache) · Leaflet/OSM/Esri with the Google adapter · PostGIS itself — the single biggest "don't build" decision in the repo, and the reason per-tree geospatial queries are one SQL statement.
+
+---
+
+## 4. Decision summary
+
+| If the question is… | The answer is |
+| --- | --- |
+| "Should we run farmOS instead of building PRs 1–8?" | No — but its Quantities triple and log-geometry patterns go into the PR 1 schema review |
+| "Should we build a field app before the verification walk?" | No — QField project + import script, this month |
+| "Should we build Sentinel-2 ingest?" | No — openEO server-side, grove-level only, small tranche |
+| "Should we buy per-tree satellite analytics?" | No — no vendor does honest per-tree at our resolution needs; VHR pipeline stays |
+| "Should we reuse a disease-detection app/model?" | No — datasets yes, models no; the honesty contract is the product |
+| "Should we automate traps with e-trap hardware?" | Not yet — manual protocol first (PR 3), hardware slots in later |
+
+**Sources:** [farmOS](https://farmos.org/) · [farmOS v4 release](https://buttondown.com/farmOS/archive/farmos-v4-has-been-released-u1f331-u1f389/) · [farmOS data model](https://farmos.org/model/) · [FAO on farmOS](https://www.fao.org/agroecology/in-action/detail/farmos-free-and-open-source-farm-management-software-platform-and-development-community/en) · [LiteFarm](https://www.litefarm.org/) · [Tania](https://usetania.org/) · [QField](https://qfield.org/) + [forestry use case](https://qfield.org/solutions/forestry-and-silviculture/) · [Mergin Maps](https://merginmaps.com/) · [CDSE](https://dataspace.copernicus.eu/) · [openEO NDVI time-series notebook](https://documentation.dataspace.copernicus.eu/notebook-samples/openeo/NDVI_Timeseries.html) · [CDSE APIs](https://documentation.dataspace.copernicus.eu/APIs.html) · [OpenDroneMap](https://opendronemap.org/) · [WebODM](https://webodm.org/) · [PlantVillage Nuru](https://apps.apple.com/us/app/plantvillage-nuru/id1441395371) + [accuracy study](https://www.frontiersin.org/journals/plant-science/articles/10.3389/fpls.2020.590889/full) · [awesome-agriculture](https://github.com/brycejohnston/awesome-agriculture)

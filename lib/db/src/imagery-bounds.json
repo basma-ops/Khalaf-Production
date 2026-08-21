@@ -1,0 +1,18 @@
+{
+  "utm": { "west": 721238, "south": 3643980, "east": 725180, "north": 3646568 },
+  "webMercator": {
+    "west": 3936889.7347657396,
+    "south": 3883482.4080727594,
+    "east": 3941648.844538485,
+    "north": 3886682.115734134
+  },
+  "wgs84": {
+    "west": 35.365682206333126,
+    "south": 32.91089258283152,
+    "east": 35.4084340105814,
+    "north": 32.9350199077019
+  },
+  "width": 7884,
+  "height": 5301,
+  "note": "wgs84 bounds describe a rectangle in EPSG:3857 (the imagery is reprojected to Web Mercator). Use directly with L.imageOverlay on a CRS.EPSG3857 map."
+}

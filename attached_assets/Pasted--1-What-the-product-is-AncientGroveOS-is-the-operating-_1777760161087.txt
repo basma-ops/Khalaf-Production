@@ -1,0 +1,494 @@
+
+## 1. What the product is
+
+AncientGroveOS is the operating record for an olive estate. By the end of all phases it answers, at any moment:
+
+- What is each tree, where is it, how is it doing?
+- What was done in the grove this week, this month, this year — and by whom? *(Phase 1+)*
+- What pests, diseases, or stress signs are present, and where? *(Phase 1+)*
+- What did each tree yield, and what was the oil quality of the batch it ended up in? *(Phase 2+)*
+- Given any bottle, which trees produced its oil? And given any tree, which bottles carry its oil? *(Phase 3+)*
+- What inputs (water, fertilizer, sprays) were applied, when, where, in what dose? *(Phase 1+)*
+- Are inherited heritage practices (Ba'al, Souri, late harvest, press-within-hours) holding up under current conditions? *(growing answer, all phases)*
+
+**Phase 0 answers:** What is each tree, where is it, what does it look like, what variety, what age — and what's the baseline state of the estate as a record?
+
+---
+
+## 2. Why this exists
+
+Existing orchard apps (Croptracker, Farmbrite, Leaftide) are good at compliance, spray records, and yield reports, but they treat trees as a unit of accounting. Heritage olive groves have **named, photographed, individual trees** that live for centuries and carry agronomic and cultural identity. AncientGroveOS keeps tree identity at the centre of the record.
+
+A second gap, which later phases fill: most tools handle harvest as a single number. An olive estate generating premium oil needs to trace **box → harvest event → tree → batch → press → oil → bottle**. Without that chain, neither growers nor customers can connect a bottle back to the trees that filled it.
+
+A third gap: heritage practices are usually invisible to software. Here they are first-class — measurable, reviewable, and adapted over time.
+
+---
+
+## 3. Goals
+
+1. **Single record per tree.** Identity, location, geometry, photos, observations, treatments, harvest history, evidence links.
+2. **Single record per grove.** Boundary, agronomic profile, year-over-year status.
+3. **Operational closeness.** Daily and weekly views the Manager actually opens; *(Phase 1)* field forms an Operations Manager can complete in under a minute per tree.
+4. **Full traceability from tree to bottle.** *(Phase 2–3)* Every bottle can be traced back to the trees that filled it; every tree can list the bottles it contributed to.
+5. **Honest evidence layering.** Satellite signals are signals, lab results are batch-level unless tree-sampled, sensor data is contextual until interpreted. The UI never collapses these distinctions.
+6. **Sensor-ready model.** *(Phase 4)* Soil moisture, weather, dendrometer, and trap-counter data attach cleanly when the hardware arrives.
+7. **Heritage practices as living rules.** Inherited practices have data, status, and adaptation pressure visible in the system.
+8. **Role-appropriate autonomy.** The Operations Manager *(Phase 1)* runs the grove year-round without daily task assignments; the Manager reviews and intervenes only on strategic calls.
+
+**Goal for Phase 0 specifically:** a clean, complete, browsable initial database — every tree on the estate has a record with location, variety, photos, and basic identity, queryable on a map and in lists.
+
+---
+
+## 4. Users
+
+| Role | Count | Phase | Activities |
+| --- | --- | --- | --- |
+| **Manager / Owner** (you) | 1 | **Phase 0+** | Strategy, registry curation, photo upload, satellite import, heritage rule curation, reports. From Phase 1+: review, lab, oil, bottling, sales. |
+| **Operations Manager** | 1 | Phase 1+ | Plans and executes own daily work; tree visits, scouting, pruning, terrace and understory work, trap counts, phenology observations, treatment application, activity logging, photo capture, new-tree planting, damage reporting. |
+| **Harvest Worker** | 4–8 in season | Phase 2+ | Harvest App only: tree harvest events, box photos, weights. |
+
+### 4.1 Operations Manager — autonomy *(Phase 1)*
+
+The Operations Manager is **not a worker waiting for assignments**. They know the year's rhythm, decide their own daily plan, and execute. The Manager does not assign tasks day-to-day; they review what happened and can flag specific trees for attention.
+
+In the Phase 1 build:
+- The Operations App opens on a self-managed plan, not an assigned task list.
+- The Manager can flag items inline ("satellite shows low vigor on T-0142, please inspect"); flags are surfaced alongside the OM's own plan, not in place of it.
+- Activity, scouting, and treatment records are the OM's primary outputs.
+
+### 4.2 Permissions
+
+| Role | Read | Write |
+| --- | --- | --- |
+| Manager | All | All |
+| Operations Manager *(Phase 1)* | All operational records; trees and groves; activity history | Field visits, scouting, pest/disease finds, trap counts, treatments, pruning and activity records, phenology events, photos, new-tree records, damage reports |
+| Harvest Worker *(Phase 2)* | Today's harvest assignments and the trees on them | Harvest events and boxes for assigned trees |
+
+Manager-only writes: lab result entry, oil batch creation, bottling runs, heritage rule status changes, tree status moves to `removed`.
+
+All destructive edits create an audit event.
+
+---
+
+## 5. The trackers — what the system monitors
+
+This section is the spine. Everything else is built to fill these in. **Trackers are aspirational across all phases**; the column "Phase" indicates when each becomes populated.
+
+### 5.1 Grove-level trackers
+
+| Category | Tracker | Source | Phase |
+| --- | --- | --- | --- |
+| **Identity & geometry** | Grove boundary polygon, area, centroid, orientation, slope class, terrace count | Manual + map drawing | **0** |
+| | Number of trees, by variety, age cohort, ancient status | Tree registry rollup | **0** |
+| **Phenology** | Current BBCH stage of grove; key date events | Operations Manager observation | 1 |
+| **Climate & water** | Daily rainfall (mm), cumulative, first rain | Manual log → weather station | 1 (manual), 4 (sensor) |
+| | Min/max temperature, humidity, leaf wetness | Phase 4 sensor | 4 |
+| | Soil moisture by depth | Phase 4 sensor | 4 |
+| **Vegetation & remote sensing** | Mean NDVI, NDWI for grove (per imagery date) | Manual upload of derived products | **0** |
+| | Low-vigor cluster count and area | Computed | **0** |
+| **Pest & disease pressure** | Olive fruit fly trap counts | Manual log → sensor | 1 (manual), 4 (sensor) |
+| | Peacock spot incidence; verticillium cases; olive moth | Scouting record | 1 |
+| **Inputs** | Fertilizer, spray, irrigation events | Treatment / irrigation log | 1 |
+| **Soil** | pH, EC, organic matter, N/P/K | Lab upload | 1 |
+| **Operations** | Pruning passes, terrace condition, understory state | Activity log + field visit | 1 |
+| **Harvest** | Total boxes, weights, mean Jaén at harvest, pressing delay | Harvest module | 2 |
+| **Oil** | Total litres produced, oil yield % | Oil batch records | 2 |
+| **Bottling** | Litres bottled, bottles produced, formats, remaining bulk | Bottling module | 3 |
+| **Quality** | Lab-tested acidity, peroxide, K232/K270, polyphenols, etc. | Lab module | 2 |
+| **Alternate bearing** | Year-over-year yield ratio | Computed | 2+ |
+| **Heritage rule status** | Per-rule evidence count and status | Heritage module | **0** (seed) → 1+ (evidence) |
+
+### 5.2 Tree-level trackers
+
+| Category | Tracker | Source | Phase |
+| --- | --- | --- | --- |
+| **Identity** | Tree code, GPS, grove, row/position, variety, age estimate, ancient status, planting date | Registry | **0** |
+| | Field tag (durable code, optional QR) | Registry | **0** |
+| | Photos over time (geotagged, timestamped) | Photo timeline | **0** |
+| **Geometry & growth** | Crown polygon and crown area (m²) | Satellite-derived, field-correctable | **0** |
+| | Trunk diameter (mm), canopy diameter (m), tree height (m) | Field measurement | 1 |
+| | Crown volume estimate | Computed | 1 |
+| **Phenology** | Current BBCH stage; tree-level stage events | Field observation | 1 |
+| **Health & stress** | Latest health index (0–100) | Computed from satellite + field | **0** (satellite only) → 1 (field) |
+| | Visible stress signs | Field visit | 1 |
+| | NDVI / GNDVI / SAVI per imagery date | Satellite import | **0** |
+| **Pest & disease** | Pest signs, disease signs, treatments | Scouting + treatment log | 1 |
+| **Operations** | Pruning history, pruning need, damage events | Activity / incident records | 1 |
+| **Yield** | Harvest events, boxes, weights, yield trend, alternate bearing | Harvest module | 2 |
+| **Bottle traceability** | Bottling runs that include this tree's oil; contribution share | Computed | 3 |
+| **Lab** (rare, only when tree-sampled) | Tree-specific oil quality | Lab module | 2 |
+| **Notes & status** | Verification status (`unverified / field-verified / disputed / removed`) | Field visit (or Manager confirmation) | **0** |
+| | Free-text notes | Anywhere | **0** |
+| **Sensors** | Trunk dendrometer, tree-mounted camera, nearby soil moisture | Sensor stream | 4 |
+
+---
+
+## 6. Modules
+
+The trackers in §5 are populated through these modules. The phase tag indicates when each module first ships in the product.
+
+### 6.1 Grove Registry *(Phase 0)*
+Boundary geometry, area, slope, orientation, terraces, soil profile, planting layout, heritage notes (cultivar, family history, terrace style, age estimate). Aggregate counts and status surfaces.
+
+### 6.2 Tree Registry *(Phase 0)*
+Searchable index of every tree. Tree detail page is the heart of the product. In Phase 0 the page shows:
+
+- Map with tree highlighted in grove context.
+- Photo timeline (geotagged, dated; swipeable).
+- Identity (code, variety, age estimate, ancient status, planting date if known).
+- Crown polygon overlay + crown area.
+- Latest satellite-derived metrics (NDVI etc., per imagery date).
+- Verification status.
+- Notes and tags.
+- Audit trail.
+
+Sections that fill in later phases: geometry & growth measurements (Phase 1), field visits (Phase 1), pest finds & treatments (Phase 1), harvest history (Phase 2), bottles produced (Phase 3), sensor readings (Phase 4).
+
+**Tree types:** olive, fig, carob, other, unknown. Fig and carob coexist with olives because of trap-tree and soil-partner heritage rules.
+
+**Field identification:** GPS proximity match (default radius 5 m) + manual confirmation against the latest photo. Optional `field_tag` for QR or painted code. Detailed in [VISUAL_TREE_INTELLIGENCE.md](VISUAL_TREE_INTELLIGENCE.md).
+
+### 6.3 Photo Library *(Phase 0)*
+Photos are first-class. Every photo is associated with:
+
+- A tree (or grove, or zone).
+- A timestamp.
+- GPS at time of capture (when available).
+- A purpose tag (`general`, `growth`; later `pre_harvest`, `box`, `pest`, `disease`, `damage`, `pruning_before`, `pruning_after`, `bottling`).
+- An optional linked entity.
+
+**Phase 0 capture paths:**
+- **Bulk import** — drop a folder of photos into the Manager app; VTI matches each to a tree by EXIF GPS + visual similarity. Manager confirms low-confidence matches.
+- **Per-tree upload** — open a tree, add photos directly.
+
+**Browse modes:**
+- Per-tree timeline (default tree page).
+- Latest photos across the estate (Manager Today view).
+- Filter by purpose tag.
+
+**On capture/import:** EXIF GPS and timestamp extracted, original retained, 512px thumbnail generated.
+
+### 6.4 Phenology & Calendar *(Phase 1, seeded earlier)*
+A grove-year calendar showing the BBCH stages and the events that bound them. In Phase 0, the calendar exists as a structure with no events logged; the Manager can log historical first-rain or harvest dates from memory if useful. From Phase 1 onwards, the OM logs events in real time.
+
+### 6.5 Field Activity Log *(Phase 1)*
+What was done, where, by whom, when. Authored by the Operations Manager. Activity types include pruning (light / structural / heavy), mowing / understory management, terrace repair, stone work / drainage, cover crop seeding, tree planting / replanting, tree removal, inspection / scouting, cleaning / clearing, damage assessment, other.
+
+### 6.6 Pest & Disease Scouting *(Phase 1)*
+A targeted form for the olive pest and disease set:
+
+| Pest / disease | Scouting cue | Treatment relevance |
+| --- | --- | --- |
+| Olive fruit fly (*Bactrocera oleae*) | Trap counts; sting marks on fruit | Threshold-based treatment, harvest timing |
+| Peacock spot (*Spilocaea oleagina*) | Dark circular spots on leaves; defoliation | Copper sprays, prune for airflow |
+| Verticillium wilt | Wilting, yellowing, vascular browning | Soil management, tolerant cultivars |
+| Olive moth (*Prays oleae*) | 3 generations: leaf, flower, fruit | Pheromone monitoring, BT treatments |
+| Olive knot (*Pseudomonas savastanoi*) | Galls on twigs after wounds | Prune in dry weather, disinfect tools |
+| Anthracnose (*Colletotrichum*) | Sunken spots on ripening fruit | Pre-harvest copper, harvest timing |
+| Black scale | Sticky honeydew, sooty mould | Biological control |
+| Olive psyllid | White waxy secretions | Monitor; rarely needs treatment |
+| Other / unknown | Photo + notes | Manager review |
+
+Scouting record fields and the trap module shape are described in detail when Phase 1 begins.
+
+### 6.7 Spray & Fertilizer Records *(Phase 1)*
+Every chemical, fertilizer, or biological input applied. Compliance-ready format:
+
+- Product (registered name, active ingredient).
+- Rate (per ha or per tree).
+- Area / trees treated.
+- Method (foliar, soil, drip, dust).
+- Date, applicator, weather conditions.
+- Withholding interval (days to harvest).
+- Notes.
+- Photos (optional).
+
+**No approval workflow.** The Operations Manager records treatments as they apply them; the Manager reviews them in the Today view. (An approval gate was considered and explicitly dropped to keep OM autonomous.)
+
+A pre-harvest withholding-period checker warns if any treated grove or tree falls inside its withholding window when a harvest is planned.
+
+### 6.8 Water & Climate *(Phase 1)*
+Daily rainfall log (manual until weather station arrives). Annual cumulative, compared to long-term average. Irrigation events for any non-Ba'al grove. First-rain marker. Heat events flagged.
+
+### 6.9 Harvest *(Phase 2 — operated through the Harvest App, §10.3)*
+Tree-level harvest workflow:
+
+1. Harvest worker selects tree (GPS-assisted), confirms identity.
+2. Captures pre-harvest tree photo.
+3. Records workers involved.
+4. Adds boxes one by one, each with photo and estimated/measured weight.
+5. Optionally samples 100 olives for **Jaén maturity index**.
+6. Completes tree harvest. Boxes are added to a batch by the Manager.
+
+### 6.10 Batch, Pressing & Oil *(Phase 2)*
+**Batch** groups boxes for the mill. **Pressing run** records mill, times, input weight, output litres, oil yield %, and the **pressing delay** (the operational measure for the Press-Within-Hours rule). **Oil batch** records volume, storage container, and tracks `volume_remaining_litres` for partial bottling.
+
+### 6.11 Lab Results *(Phase 2)*
+Default attribution: oil-batch level. Tree-level only when tree-specific sampling occurred — the UI always shows the level. Captured fields: free acidity, peroxide value, K232, K270, ΔK, total polyphenols, oleocanthal, oleacein, fatty acid composition, lab name, sample date, report PDF.
+
+Derived flags: extra virgin (`acidity ≤ 0.8%`), health-claim eligible polyphenols (`≥ 250 mg/kg`).
+
+### 6.12 Bottling & Bottle→Tree Traceability *(Phase 3)*
+Bottling runs draw oil from one or more oil batches into bottles of a chosen format with a lot code. The system materializes per-tree contribution shares so any lot code resolves to its contributing trees, and any tree resolves to the bottling runs that include its oil. Per-bottle codes (QR for premium / single-tree releases) are Phase 4. Detailed schema in §8.
+
+### 6.13 Heritage Practices *(seeded Phase 0; evidence accumulates Phase 1+)*
+The 9 named rules (First Rain · Ba'al Rainfed · Fig Trap Trees · Carob Soil Partners · Wild Understory · Sanasil Stone Terraces · Late Harvest · Souri Single Cultivar · Press Within Hours) are stored as structured rules with: traditional rule · rationale · scientific hypothesis · required data · climate risk · evidence status · linked records.
+
+In Phase 0 the rules are seeded with their starting status. Evidence linking begins in Phase 1.
+
+### 6.14 AI Grove Assistant *(optional, can ship anytime; not in Phase 0)*
+Grounded retrieval over the database. Cites every record. Useful once data accumulates; in Phase 0 the database is too thin for the Assistant to be more useful than direct browsing.
+
+### 6.15 Reports
+Reports the Manager actually wants:
+
+- **Registry health report** *(Phase 0)*: how many groves, how many trees, % field-verified, % with at least one photo, by-grove breakdown — answers "is the database actually built?"
+- **Tree report** *(Phase 0)*: identity, photo strip, crown geometry, satellite metrics, notes. Phase 1+ adds visit and treatment timeline; Phase 2+ adds harvest history; Phase 3+ adds bottles produced.
+- **Year report** *(Phase 1+)*: rainfall vs avg, phenology shifts, pest pressure peaks, treatments, pruning, harvest, oil quality, bottling, heritage rule evidence delta.
+- **Harvest report** *(Phase 2+)*: total kg, kg per grove, kg per tree, maturity, pressing delays, oil yield, lab summary.
+- **Lot trace report** *(Phase 3+)*: full origin chain from tree photos through to lab numbers for any bottling lot code.
+- **Compliance export** *(Phase 1+)*: spray & fertilizer log filtered to a date range and grove (CSV/PDF).
+
+---
+
+## 7. Manager dashboard (desktop)
+
+### 7.1 Phase 0 Today view — registry building
+This is what the Manager opens during the registry-build period.
+
+- **Registry progress:** total groves, total trees, % field-verified, % with at least one photo, recently added trees.
+- **Latest photos** added to the library (thumbnail strip).
+- **Pending VTI confirmations** (low-confidence photo-to-tree matches awaiting Manager decision).
+- **Pending imports** (uploads in progress — bulk tree CSVs, satellite GeoJSONs, photo folders).
+- **Open questions on the data:** trees missing variety, age, or photo; trees flagged `disputed` during verification.
+
+### 7.2 Today view as it grows *(Phase 1+)*
+From Phase 1 onwards, the Today view also shows OM activity since last login, items needing decisions, today's harvest *(Phase 2)*, trap counts overdue, phenology nudges, withholding watch, overdue items.
+
+### 7.3 Year view *(Phase 1+)*
+Grove health distribution by month, rainfall vs long-term average, phenology multi-year overlay, pest pressure curves, field visit coverage, heritage rule evidence accumulation, harvest/oil/bottling summary.
+
+### 7.4 Harvest view *(Phase 2, in season only)*
+Live harvest progress, tree harvest map, active events, today's boxes, batches, pressing schedule, maturity sampling.
+
+---
+
+## 8. Data model
+
+The full data model is described here even though Phase 0 only writes to a subset (the **Phase 0** marker indicates which entities are exercised in Phase 0). The architecture stays whole so later phases extend rather than restructure.
+
+| Entity | Phase | Key fields |
+| --- | --- | --- |
+| `groves` | **0** | id, code, name, boundary (polygon), area, slope, orientation, soil_profile, notes |
+| `trees` | **0** | id, code, grove_id, location (point), crown_polygon, variety, age_estimate, planting_date, ancient, verification_status, field_tag, notes |
+| `tree_geometry_records` | 1 | tree_id, observed_at, trunk_diameter_mm, canopy_diameter_m, tree_height_m, crown_area_m2 |
+| `imagery_acquisitions` | **0** | id, source, captured_at, resolution, area_covered |
+| `tree_satellite_observations` | **0** | tree_id, imagery_id, ndvi, gndvi, savi, crown_area, health_index, anomaly_flags, recommended_action |
+| `phenology_events` | 1 | id, scope_type (`grove\|tree`), scope_id, stage_code, observed_at, observer, notes |
+| `field_visits` | 1 | id, observer_id, occurred_at, grove_id, tree_id?, gps, severity, action_taken, follow_up, notes |
+| `media` | **0** | id, kind (`photo\|pdf`), entity_type, entity_id, captured_at, gps, purpose_tag, exif, storage_path, thumb_path |
+| `manager_flags` | 1 | id, raised_by, about_entity_type, about_entity_id, note, raised_at, resolved_at?, resolution_note? |
+| `pest_disease_finds` | 1 | id, scout_id, occurred_at, grove_id, tree_id?, species_code, severity, percent_affected, recommended_action, linked_treatment? |
+| `traps` | 1 | id, grove_id, location, kind, installed_at |
+| `trap_counts` | 1 | trap_id, observed_at, count, photo_id?, source (`manual\|sensor`) |
+| `treatments` | 1 | id, occurred_at, kind (`spray\|fertilizer\|foliar\|biological`), product, active_ingredient, rate, unit, area_or_trees, method, applicator, withholding_days, weather, notes |
+| `irrigation_events` | 1 | id, grove_id, occurred_at, volume_litres, method |
+| `soil_tests` | 1 | id, grove_id, sampled_at, ph, ec, organic_matter_pct, n, p, k, lab |
+| `weather_log` | 1 | id, grove_id, observed_on, rainfall_mm, temp_min, temp_max, humidity_avg, leaf_wetness_hours, source |
+| `harvest_seasons` | 2 | id, year, name, started_on, ended_on, notes |
+| `harvest_events` | 2 | id, season_id, grove_id, tree_id, date, status, start_time, end_time, fruit_condition, est_weight, measured_weight, maturity_index, notes |
+| `harvest_event_workers` | 2 | harvest_event_id, user_id |
+| `harvest_boxes` | 2 | id, code, harvest_event_id, sequence, photo_id, est_weight, measured_weight, fruit_quality, batch_id?, notes |
+| `harvest_batches` | 2 | id, code, season_id, grove_id?, date, status, total_boxes, est_weight, measured_weight, notes |
+| `pressing_runs` | 2 | id, batch_id, mill, started_at, completed_at, pressing_delay_minutes, input_weight, output_litres, yield_pct, temperature, notes |
+| `oil_batches` | 2 | id, code, pressing_run_id, volume_litres, volume_remaining_litres, storage_container, status, notes |
+| `lab_results` | 2 | id, attribution_level, oil_batch_id?, batch_id?, tree_id?, sampled_at, lab_name, acidity, peroxide, k232, k270, dk, polyphenols_total, oleocanthal, oleacein, fatty_acids_jsonb, report_media_id |
+| `bottling_runs` | 3 | id, code, bottled_at, location, format, bottles_produced, total_volume_litres, label_template, quality_basis_lab_result_ids[], single_tree, single_grove, status, notes |
+| `bottling_run_oil_sources` | 3 | bottling_run_id, oil_batch_id, volume_litres_drawn |
+| `bottle_origins` *(materialized)* | 3 | bottling_run_id, tree_id, contribution_kg, contribution_share_pct |
+| `bottles` | 4 | id, bottling_run_id, code, status |
+| `heritage_rules` | **0** | id, code, name, traditional_rule, rationale, hypothesis, data_required, climate_risk, status, action_template |
+| `rule_evidence` | 1+ | rule_id, record_type, record_id, contribution, note |
+| `users` | **0** | id, email, name, role (`manager\|operations_manager\|harvest_worker`), active_seasons[] |
+| `audit_events` | **0** | id, actor_id, entity_type, entity_id, action, before_jsonb, after_jsonb, note, created_at |
+| `sensor_streams` | 4 | id, kind, attached_entity_type, attached_entity_id, unit, sample_interval_seconds, source, calibration |
+| `sensor_readings` | 4 | stream_id, observed_at, value_numeric, value_jsonb, quality_flag |
+
+**Phase 0 active set:** `groves`, `trees`, `imagery_acquisitions`, `tree_satellite_observations`, `media`, `heritage_rules`, `users`, `audit_events`. Everything else is created (schema in place) but not written to until its phase begins.
+
+**Key relationships** (full):
+- `grove 1—* tree`
+- `tree 1—* tree_geometry_record`, `1—* tree_satellite_observation`, `1—* harvest_event`, `1—* media`
+- `harvest_event 1—* harvest_box`
+- `harvest_batch 1—* harvest_box`
+- `harvest_batch 1—1 pressing_run`
+- `pressing_run 1—* oil_batch`
+- `oil_batch 1—* lab_result` (and rare `tree 1—* lab_result` only when tree-sampled)
+- `oil_batch *—* bottling_run` via `bottling_run_oil_sources`
+- `bottling_run *—* tree` via `bottle_origins` materialized view
+- `heritage_rule *—* {records}` via `rule_evidence`
+
+---
+
+## 9. Photo features and AI use
+
+### 9.1 Photo timeline per tree *(Phase 0)*
+The single most important visual feature in the product. Every tree page leads with a swipeable, dated photo strip.
+
+### 9.2 Pre-harvest and box photos *(Phase 2)*
+Mandatory in the Harvest App when Phase 2 ships.
+
+### 9.3 Visual Tree Intelligence
+Photo → tree match, structured extraction. **Phase 0 needs the matching half**: dropping a folder of photos into the Manager app and having them placed against the right trees. Structured analysis (pest/disease/damage extraction) is most useful from Phase 1 onwards. Full spec: [VISUAL_TREE_INTELLIGENCE.md](VISUAL_TREE_INTELLIGENCE.md).
+
+### 9.4 AI uses we can add later
+- Pest/disease triage from scouting photos *(Phase 4)*.
+- Maturity index estimation from a 100-olive tray photo *(Phase 4)*.
+- Photo-based growth tracking *(Phase 4)*.
+
+---
+
+## 10. The frontends (rolled out by phase)
+
+### 10.1 Manager Command Center *(Phase 0+)*
+The strategic surface. Used by the Manager at a desk, occasionally on a tablet. **The only frontend in Phase 0.**
+
+**Phase 0 sections:**
+- **Today** (registry progress + photo review + imports).
+- **Grove Map** (boundaries + tree points + crown polygons).
+- **Tree Registry** (search, filter, browse, edit).
+- **Photo Library** (per-tree timelines, bulk upload, VTI review queue).
+- **Heritage Rules** (CRUD, seeded with the 9 named rules).
+- **Imports / Data** (CSV/GeoJSON tree imports; satellite observation uploads; photo folder ingest).
+- **Reports** (registry health, tree report).
+
+**Sections that fill in later phases:** Year view, Harvest view, Operations Manager flags, Field Visits, Pest & Disease, Activity log, Phenology, Harvest, Batches & Pressing, Oil, Bottling, Lab Results, AI Grove Assistant.
+
+### 10.2 Operations App *(Phase 1)*
+Mobile PWA used by the Operations Manager every working day, all year. Self-managed Plan view, camera-first forms for visits, scouting, traps, treatments, activities, phenology. End-of-day sync.
+
+### 10.3 Harvest App *(Phase 2)*
+Mobile PWA used by harvest workers and the Operations Manager during the harvest window. Single-purpose; foolproof; PIN/magic-link login; one-screen-per-step harvest flow.
+
+---
+
+## 11. Sensor integration *(Phase 4)*
+
+Hardware to plan for, in order of value-for-money:
+
+1. Weather station with rainfall, temperature, humidity, leaf wetness.
+2. Soil moisture probes at root depth.
+3. Olive fruit fly trap counters.
+4. Trunk dendrometers on representative trees.
+5. Tree-mounted cameras on heritage trees.
+
+Connectivity: LoRaWAN preferred. Data shape: `sensor_streams` and `sensor_readings` tables are reserved in §8.
+
+---
+
+## 12. Workflows
+
+A short orientation. The detailed workflow inventory and current-focus framing live in [WORKFLOWS.md](WORKFLOWS.md).
+
+### 12.1 Phase 0 — Initial estate setup *(current focus)*
+Manager defines groves, imports or enters trees, uploads satellite-derived data, captures or imports baseline photos, seeds heritage rules. Tree archive and registry-health views become the daily check-in.
+
+### 12.2 Phase 1 — Daily field operations
+Manager morning review; OM daily plan and execution; weekly trap counts; treatment recording; phenology event logging; first rain anchor; pruning campaign in winter; flowering monitoring; fruit-fly intensification.
+
+### 12.3 Phase 2 — Harvest
+Maturity sampling; harvest planning; harvest day execution via Harvest App; batching and pressing; oil batches; lab sampling and result intake.
+
+### 12.4 Phase 3 — Bottling
+Bottling runs (multi-source) with bottle→tree resolution and lot trace report.
+
+### 12.5 Heritage rule evidence loop *(all phases)*
+Records linked to rules either explicitly or by query. Rule status reviewed at end of season.
+
+---
+
+## 13. Phase 0 scope (current build)
+
+### 13.1 In Phase 0
+
+**Frontend:** Manager Command Center (web only).
+
+**Functional scope:**
+- Grove registry: create/edit groves with boundary polygon, area, slope, orientation, soil profile, heritage notes.
+- Tree registry: create/edit trees with code, GPS, variety, age estimate, ancient flag, planting date, notes, verification status.
+- Tree map: all groves and trees plotted; crown polygons rendered from satellite-derived data.
+- Photo library: per-tree timeline; bulk-upload from folder of photos; VTI matches photos to trees by EXIF GPS + visual similarity; Manager confirms/corrects low-confidence matches.
+- Satellite observation import: CSV/GeoJSON of per-tree NDVI / crown / health values.
+- Bulk tree import: CSV/GeoJSON.
+- Heritage rules seed: 9 named rules with status `hypothesis` or `monitoring` as appropriate; basic CRUD.
+- Registry health report: completeness checks across the database.
+- Tree report (Phase 0 fields).
+- Audit events on all writes.
+- Auth: Manager login (Supabase Auth, email + password).
+- English UI.
+
+### 13.2 Not in Phase 0
+- Operations App (Phase 1).
+- Harvest App (Phase 2).
+- Bottling module (Phase 3).
+- Treatment approval flow — *removed entirely*; treatments will be recorded by the OM in Phase 1 with no approval gate.
+- Field visits, scouting, trap counts, treatments, activity logs (Phase 1).
+- Phenology calendar (Phase 1).
+- Harvest, batches, pressing runs, oil batches, lab results (Phase 2).
+- IoT sensor integration (Phase 4).
+- AI photo triage (Phase 4).
+- AI Grove Assistant (any phase, optional).
+- Push notifications, SMS.
+- Multi-estate / multi-tenant.
+- Localization beyond English.
+
+### 13.3 Phase 0 acceptance
+
+The Phase 0 build is complete when the Manager can:
+
+1. **Define the estate.** Create at least one grove with a boundary drawn on a map; add basic metadata.
+2. **Populate the tree registry.** Add trees one-by-one, *and* via CSV/GeoJSON bulk import, *and* by uploading a folder of geotagged photos that the system maps to the right trees (creating new trees when GPS doesn't match any existing tree, with manual confirmation).
+3. **See the estate on a map.** Open the Grove Map, see all groves and trees plotted, click any tree to open its detail page.
+4. **Browse a tree's history.** Open a tree detail page; see its photo timeline, identity fields, crown polygon, satellite metrics, notes, and audit trail.
+5. **Mark verification.** Walk through trees on the map, mark each as `field-verified` once confirmed (Manager does this from the desktop based on field walkthrough notes — no Operations App needed yet).
+6. **Seed heritage rules.** All 9 named rules exist with their starting metadata; can be edited.
+7. **Run the registry health report.** See completeness percentages and a list of trees missing key fields.
+
+---
+
+## 14. Roadmap
+
+**Phase 1 — Field operations** *(after Phase 0 stabilizes)*
+- Operations App PWA for the Operations Manager.
+- Field visits, scouting, trap counts, treatments, activity logs.
+- Phenology calendar with multi-year overlay (overlay starts useful at Phase 2+).
+- Manager flag mechanism.
+- Today view extended with OM activity, pending decisions, withholding watch.
+- Weather and rainfall log.
+
+**Phase 2 — Harvest**
+- Harvest App PWA for harvest workers and the Operations Manager.
+- Harvest events, boxes, batches, pressing runs, oil batches, lab results.
+- Maturity sampling, pre-harvest photo archive.
+- Harvest view in Manager dashboard.
+- Year report, harvest report.
+
+**Phase 3 — Bottling & traceability**
+- Bottling runs with multi-source oil composition.
+- `bottle_origins` materialization.
+- Lot trace report (printable).
+- Bottle→tree and tree→bottle queries.
+
+**Phase 4 — Sensors & AI**
+- IoT integration (weather, soil moisture, trap counter, dendrometer, tree camera).
+- AI photo triage (pest/disease/maturity).
+- Per-bottle QR codes for premium / single-tree releases.
+- Climate indices: First Rain Index · Ba'al Resilience Score · Terrace Risk Score · Trap Tree Influence Analysis · Understory Coverage · Ancient Tree Priority Score.
+
+**Phase 5 — Research & multi-estate**
+- Public lot trace at `/trace/<lot_code>`.
+- Multi-year reports, exportable datasets.
+- Multi-estate support.
+
+---

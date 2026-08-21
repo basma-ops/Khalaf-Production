@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/m/"
+title = "Khalaf Olive Groves — Manager (Mobile)"
+version = "1.0.0"
+id = "artifacts/manager-mobile"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/m/" ]
+localPort = 18086
+
+[services.development]
+run = "pnpm --filter @workspace/manager-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/manager-mobile", "run", "build" ]
+publicDir = "artifacts/manager-mobile/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18086"
+BASE_PATH = "/m/"

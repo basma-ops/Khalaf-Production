@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/tree-validator/"
+title = "Khalaf — Tree Validator (Field)"
+version = "1.0.0"
+id = "artifacts/tree-validator"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/tree-validator/" ]
+localPort = 24253
+
+[services.development]
+run = "pnpm --filter @workspace/tree-validator run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tree-validator", "run", "build" ]
+publicDir = "artifacts/tree-validator/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24253"
+BASE_PATH = "/tree-validator/"

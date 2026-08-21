@@ -1,0 +1,380 @@
+tecture
+
+> **Status:** v2.3 (2026-08-13) — Phase 0 Manager Command Center + initial database + the tree-intelligence quality infrastructure + the reuse tranche implemented (QField campaign bridge, grove-NDVI tier live, Data Doctor, integration/CI test tiers) + the guided field-walk app.
+> **Audience:** anyone (including future you) who needs to change this codebase without re-deriving it.
+> **Doc map:** product intent → [SPEC.md](../SPEC.md) · platform capabilities (product view) → [PLATFORM_CAPABILITIES.md](PLATFORM_CAPABILITIES.md) · stack rationale → [STACK.md](../STACK.md) · workflows → [WORKFLOWS.md](../WORKFLOWS.md) · photo intelligence design → [VISUAL_TREE_INTELLIGENCE.md](../VISUAL_TREE_INTELLIGENCE.md) · climate dataset → [CLIMATE_HISTORY.md](CLIMATE_HISTORY.md) · test strategy → [TEST_PLAN.md](TEST_PLAN.md) + [TEST_PLAN_TREE_INTELLIGENCE.md](TEST_PLAN_TREE_INTELLIGENCE.md) · operations layer design → [AGRONOMY_OPERATIONS.md](AGRONOMY_OPERATIONS.md) · backup/restore → [BACKUP.md](BACKUP.md) · competitive analysis → [XFARM_REUSE.md](XFARM_REUSE.md) · open-source reuse decisions → [ALTERNATIVES_REUSE.md](ALTERNATIVES_REUSE.md) · drone doctrine (DJI Avata 360) → [DRONE_OPERATIONS.md](DRONE_OPERATIONS.md)
+
+---
+
+## 1. What this system is
+
+A **single-estate system of record** for the Khalaf family olive groves (Rameh, Galilee): 8 groves, 1,326 individually-registered trees, their photos, satellite-derived health signals, 45 seasons of climate history, and 9 inherited heritage rules with an evidence trail. One operator (the Manager), one full-time Operations Manager (Phase 1), seasonal harvest crew (Phase 2).
+
+Three architectural convictions shape everything:
+
+1. **The database is the product.** The UI is a lens over Postgres. Data-integrity failures (a photo matched to the wrong tree, a duplicated climate row) are the worst failures; visual bugs are the cheapest.
+2. **Trees are individuals, not inventory.** Every tree has a durable code, a location, a photo timeline, and a history. This inverts the usual agtech model (fields as the unit) and drives the per-tree data model, the herbarium-card UI, and the photo→tree matching pipeline.
+3. **Honesty is an architectural constraint, not copy-editing.** Satellite values are *signals*, weather is a *regional estimate*, ages are *estimates*. Every derived number keeps provenance, and the vocabulary rules (§8) are enforced in schema comments, UI copy, and review flows alike.
+4. **The contract is executable.** The honesty rules and decision thresholds are pinned by tests and frozen baselines (§6.7): a yield output with a kilograms field is a *parse failure*, irrigation advice from a photo alone is *unreachable code*, and a changed photo-match decision *fails CI* until the diff is reviewed. Writing the tests first paid immediately — they surfaced two latent climate defects and a fake-unique index in their first week (all three fixed).
+
+---
+
+## 2. Runtime topology
+
+```mermaid
+flowchart LR
+    subgraph Browser
+      UI[Next.js pages<br/>React 19 RSC + client islands]
+    end
+    subgraph "localhost (single machine)"
+      NEXT[Next.js 16 server<br/>App Router · Turbopack]
+      PG[(PostgreSQL 17.7<br/>+ PostGIS 3.6<br/>Homebrew service · :5432)]
+      FS[/uploads/ dir<br/>originals + thumbs/]
+      OUT[/outputs/climate/<br/>CSV · JSON exports/]
+    end
+    subgraph External
+      OM[Open-Meteo Historical API<br/>ERA5 reanalysis]
+      TILES[Tile servers<br/>OSM · Esri World Imagery]
+      GMAPS[Google Maps JS API<br/>optional, key-gated]
+    end
+
+    UI -->|HTTP| NEXT
+    NEXT -->|postgres-js| PG
+    NEXT -->|read/write files| FS
+    UI -->|tile requests<br/>direct from browser| TILES
+    UI -.->|only if key set| GMAPS
+
+    SCRIPTS[CLI scripts<br/>tsx via pnpm] -->|postgres-js| PG
+    SCRIPTS -->|one-time fetch| OM
+    SCRIPTS --> OUT
+    SCRIPTS --> FS
+```
+
+Key properties:
+
+- **Everything runs on one machine.** No cloud services are load-bearing. Docker was removed mid-project; Postgres is a Homebrew service (`postgresql@17`) that survives reboots. Supabase/Vercel remain the intended production targets (STACK.md) but nothing depends on them yet.
+- **No auth.** Deliberately skipped in Phase 0 (single trusted operator on localhost). Every route and server action is an unauthenticated write. This is the first thing to change before any network exposure.
+- **External calls are one-time or browser-side.** Open-Meteo is hit only by the climate extract script (rate-limit-aware, cell-coalescing). Map tiles are fetched by the browser, not the server. The eval harness calls the Anthropic API only in explicit `--live` runs — never in the request path, never in CI.
+- **Git state:** history begins at `2cefbb4` (tagged `phase-0-baseline`), pushed to the private GitHub repo `basma-ops/AncientGroveOS`. Excluded by design: `.env`, `uploads/` (1.5G), `outputs/`, the 156MB source raster.
+- **Continuity:** a daily 21:00 LaunchAgent runs `scripts/backup.sh` — TOC-verified `pg_dump` (30 kept local, 7 in iCloud), rsync uploads mirror with 90-day deletion quarantine, `.env` copies. Restore paths documented and drilled ([BACKUP.md](BACKUP.md)).
+
+---
+
+## 3. Stack
+
+| Layer | Choice | Notes |
+| --- | --- | --- |
+| Framework | Next.js 16.2 (App Router) + React 19 | RSC-first; client components only where interaction demands |
+| Language | TypeScript strict | `tsc --noEmit` is the gate; no ESLint config beyond Next defaults |
+| Database | PostgreSQL 17.7 + PostGIS 3.6 | Geometry is first-class: points, polygons, geography distance |
+| ORM | Drizzle 0.45 + `postgres-js` | Schema in TS; **most queries are raw `sql` template fragments**, not the query builder — PostGIS calls (`ST_AsGeoJSON`, `ST_DWithin`, `ST_X/Y`) demand it |
+| Styling | Tailwind 4 (`@theme` tokens) + Khalaf brand CSS | No component library; brand utilities in `globals.css` |
+| Maps | Leaflet 1.9 (default) / Google Maps JS (optional) behind a shared adapter | MapLibre + terra-draw only in the grove-boundary editor |
+| Images | `exifr` (EXIF), `sharp` (thumbnails; no HEIC decode on this box → `sips` fallback), local filesystem storage | |
+| Tests | Vitest 4 (`TZ=UTC` pinned, `@/` alias) | 145 unit tests (13 suites, no DB/network) + 32 integration tests (4 suites, real PostGIS via `pnpm test:db`, incl. tests of the Data Doctor itself); CI on GitHub Actions |
+| Vision evals | `@anthropic-ai/sdk` (pinned `claude-opus-5`) | `evals/harness/` only — replay mode is free/deterministic; `--live` is manual and budgeted |
+| Scripts | `tsx` CLI entry points (+ `bash` for backup) | Idempotent-by-design; summary upserts keep ids durable so evidence links survive re-extracts (task #9) |
+
+---
+
+## 4. Repository layout
+
+```
+AncientOS/
+├── app/                          # Next.js App Router — every page is a server component
+│   ├── page.tsx                  #   Overview "Today" dashboard (live DB stats)
+│   ├── groves/                   #   list · [code] detail · new (boundary draw) · actions.ts
+│   ├── trees/                    #   registry list (filters/sort/pagination) · [code] herbarium detail · actions.ts
+│   ├── manager/
+│   │   ├── map/                  #   geospatial command center (+ manager-map-client.tsx island)
+│   │   ├── climate/              #   45-season climate dashboard
+│   │   └── rules/                #   heritage rules + evidence
+│   ├── photos/                   #   library · upload (bulk, drag-drop) · review (match queue)
+│   ├── field/                    #   field map stub + walk/ — guided field-walk app (grove →
+│   │                             #     NN-routed tour → select-then-photograph via capture-override)
+│   └── api/
+│       ├── photos/               #   upload · [id]/{original,thumb,confirm,reject}
+│       └── trees/[code]/         #   JSON detail (feeds the map drawer)
+├── components/
+│   ├── brand/                    # Khalaf shell: BrandSidebar, TopBar, PageHead, Icon, TatreezStar
+│   ├── maps/                     # the map subsystem (§6.2) — adapter views + layer components
+│   ├── map/                      # legacy: grove boundary editor/viewer (MapLibre + terra-draw)
+│   └── tree/                     # TreeManagePanel, QuickVerify, ActivityTimeline
+├── lib/
+│   ├── db/                       # schema.ts (single source of truth) + per-domain query modules
+│   ├── maps/                     # MapAdapter contract, provider config, GeoJSON shaping, tile presets
+│   ├── photos/                   # exif.ts · match.ts (PostGIS wrapper) · matchDecision.ts (pure rule)
+│   │                             #   · purposeTags.ts (client-safe enum) · storage.ts · thumbnail.ts
+│   ├── climate/                  # openMeteo.ts · season.ts · events.ts · extract.ts · output.ts
+│   ├── analysis/                 # stressFusion.ts — the B5 watering-advice fusion layer (pure)
+│   └── geo/                      # PostGIS SQL helpers (asGeoJSON, withinRadius, …)
+├── evals/                        # tree-intelligence acceptance layer (§6.7)
+│   ├── schemas.ts                #   Zod contracts for the 5 photo capabilities (honesty structural)
+│   ├── labeling.ts               #   keystroke→label configs, pinned to schemas by tests
+│   ├── harness/                  #   run-eval.ts · model.ts · cache.ts · score.ts · consistency.ts
+│   ├── golden/<cap>/labels.json  #   owner labels (written by pnpm label)
+│   ├── cache/                    #   committed raw model responses (replay tier)
+│   └── reports/                  #   timestamped eval reports (committed trend history)
+├── tests/
+│   ├── unit/                     # 11 suites, 131 tests — pure logic, no DB/network
+│   ├── benchmarks/               # A3 drift baselines: scenarios + frozen decisions + live corpus
+│   └── fixtures/photos/          # deterministic EXIF fixtures (+ generator)
+├── scripts/                      # CLI: seed · climate extract · evidence linker · photo reindex
+│   │                             #   · label-photos · matching-drift · update-matching-baseline
+│   │                             #   · backup.sh (+ launchd/ plist) · owner's Python helpers
+├── drizzle/                      # generated SQL migrations 0000–0005 (committed; drizzle-kit)
+├── public/khalaf/                # brand fonts (.otf) + tatreez/logo assets
+├── uploads/                      # photo originals + thumbnails (gitignored, live data)
+├── outputs/climate/              # extract CSVs/manifest (regenerable)
+├── config/climate_thresholds.json# all climate windows/thresholds — edit + re-extract to re-derive
+└── docs/                         # this file + specialist docs
+```
+
+Conventions:
+
+- **`lib/db/<domain>.ts` owns all SQL for a domain** (trees, groves, photos, climate, rules, mapLayers). Pages never write inline SQL; they import query functions. Raw-row interfaces (`Raw*Row`) are parsed into camelCase types at the module boundary.
+- **Server components fetch, client islands interact.** Pages are `async` RSCs doing `Promise.all` over query functions; interactivity (map, filters, review queue, manage panel) lives in `"use client"` files that receive serialized props.
+- **Mutations go through server actions** (`app/*/actions.ts`) validated with Zod, returning `{ok} | {ok:false, error}` — never throwing to the client — and each calls `revalidatePath` after writing.
+
+---
+
+## 5. Data model
+
+Single schema file: [`lib/db/schema.ts`](../lib/db/schema.ts). 14 tables in five domains plus reserved Phase-2+ surface. Geometry columns use a custom Drizzle type emitting `geometry(<Type>,4326)`; GeoJSON conversion happens in SQL (`ST_GeomFromGeoJSON` / `ST_AsGeoJSON`), never in JS.
+
+```mermaid
+erDiagram
+    groves ||--o{ trees : "grove_id"
+    trees ||--o{ tree_satellite_observations : "tree_id"
+    imagery_acquisitions ||--o{ tree_satellite_observations : "imagery_id"
+    trees ||--o{ media : "entity_id (when entity_type='tree')"
+    groves ||--o{ grove_weather_daily : "grove_id"
+    groves ||--o{ grove_weather_season_summary : "grove_id"
+    groves ||--o{ rain_events : "grove_id"
+    weather_sources ||--o{ grove_weather_daily : "source_id"
+    heritage_rules ||--o{ rule_evidence : "rule_id"
+    grove_weather_season_summary ||--o{ rule_evidence : "record_id (polymorphic)"
+    groves ||--o{ map_layers : "grove_id (nullable)"
+    users ||--o{ audit_events : "actor_id"
+```
+
+**Registry domain** — `groves` (boundary polygon, area, slope, terraces, heritage notes) · `trees` (code, point, crown polygon, variety, age estimate, `ancient`, `verification_status` enum, field tag). Tree **code** (`KOG-MORAN-0142`) is the stable public identity; UUIDs are internal and *not stable across reseeds* — a lesson learned when a DB rebuild orphaned photo links (see §10).
+
+**Satellite domain** — `imagery_acquisitions` (one row per source image) · `tree_satellite_observations` (per tree × acquisition: NDVI/GNDVI/SAVI, crown area, health index 0–100, anomaly flags, recommended action). Currently **single-date** (one baseline acquisition); the schema supports time-series but no ingest pipeline exists yet (the top item in XFARM_REUSE.md).
+
+**Media domain** — `media` is polymorphic (`entity_type`/`entity_id`, nullable while unmatched) with a `match_status` enum (`auto_matched · confirmed · needs_review · unmatched · rejected`), `match_metadata` JSON (candidate list with distances), EXIF blob, GPS point, purpose tag enum (with Phase-1+ values pre-reserved), and filesystem-relative `storage_path`/`thumb_path`.
+
+**Climate domain** — `weather_sources` (provenance registry) · `grove_weather_daily` (~133K rows, per grove × day) · `grove_weather_season_summary` (8 × 45 seasons: first-rain dates under four thresholds, winter/water-year sums, heat/frost/dry-spell stats) · `rain_events` (typed: first_rain, heavy_rain, storm_3day, dry_spell). Season-year convention: **season N = Sep 1 of N−1 through Aug 31 of N**.
+
+**Heritage domain** — `heritage_rules` (9 seeded rules, status enum `confirmed·monitoring·hypothesis·needs_data`) · `rule_evidence` (polymorphic `record_type`/`record_id`, contribution `supports·contradicts·context`) — 1,064 climate-derived evidence rows currently linked.
+
+**Cross-cutting** — `users` (role enum reserved for Phase 1/2 actors; unused while auth is absent) · `audit_events` (append-only: actor, entity, action, before/after JSONB) · `map_layers` (raster overlay registry: layer type, source kind, tile URL or image URL + bounds, **source vs display vs analysis resolution kept distinct** — the resampling-honesty rule in schema form).
+
+**Known schema caveats:**
+
+- ✅ *(fixed, migration 0005)* `grove_weather_daily_unique` and `grove_weather_season_summary_unique` are now **real unique indexes**; the extract's `ON CONFLICT DO NOTHING` verified as a true no-op against live data (duplicate insert → `INSERT 0 0`).
+- ✅ *(fixed, task #9)* Summaries are now **upserted in place** on (grove, season, source) — ids are durable across re-extracts, proven by identical id-set checksums before/after a full re-run (360 ids, 1,072 evidence links, 0 dangling). The evidence linker is a full reconciler: inserts missing links, refreshes stale baked notes, removes links whose rule no longer fires. `rain_events` remain delete-then-insert (nothing references them by id — noted in code).
+- Reserved-but-unbuilt tables from SPEC and AGRONOMY_OPERATIONS (activities, incidents, traps, samples, treatments, phenology, harvest chain, sensors) are *not* in the schema yet — the docs define the shapes; they land with their phases.
+
+---
+
+## 6. Subsystems
+
+### 6.1 Brand / UI shell
+
+The Khalaf identity is implemented as design tokens, not a component library: [`app/globals.css`](../app/globals.css) defines the palette (paper/bone grounds, olive greens, ink, clay accents) as Tailwind 4 `@theme` variables plus semantic utility classes (`.k-h1`, `.k-eyebrow`, `.k-badge`, `.k-card`, `.health-dot.*`, `.tatreez-rule`). Fonts (Garamond Premier, Source Serif, Acumin, Adobe Arabic) are self-hosted `.otf` under `public/khalaf/`. The shell — [`BrandSidebar`](../components/brand/BrandSidebar.tsx) (sectioned nav with route-aware active state; Phase-1 items rendered muted), `TopBar` (crumbs/search/actions), `Icon` (inline stroke set), `TatreezStar` (the 8-point brand mark, also used as status glyph) — wraps every page via the root layout's `240px + 1fr` grid. The one deliberate "novel moment": the tree detail page is styled as a **herbarium specimen card** (tatreez corner ornaments, "Specimen no." eyebrow, Latin binomial, Arabic subtitle).
+
+### 6.2 Map subsystem — the provider adapter
+
+The largest architectural pattern in the repo. Motivation: support Google Maps when a key exists, free Leaflet otherwise, without any page knowing which is active.
+
+```
+lib/maps/types.ts        MapAdapter interface: setGeoJsonLayer / removeLayer /
+                         onLayerClick / setRasterOverlay / setImageOverlay / fitToData
+lib/maps/mapConfig.ts    resolveMapConfig() — env → {provider, keys}; server-side only
+components/maps/
+  MapProvider.tsx        renders GoogleMapView | LeafletMapView, publishes the
+                         adapter via React context (useMapAdapter)
+  LeafletMapView.tsx     adapter impl over Leaflet (L.geoJSON, circleMarker, tileLayer)
+  GoogleMapView.tsx      adapter impl over google.maps.Data / GroundOverlay / ImageMapType
+  ── layer components (side-effect components: useEffect → adapter calls, render null)
+  GroveLayer             boundary polygons; click → filter to grove
+  TreeLayer              1,326 points, styled per-feature: health-bucket fill,
+                         ancient ring, anomaly stroke
+  TreeLabelLayer         tree-code labels, zoom-gated (≥17)
+  GroveOverlayLayer /    high-res grove PNG overlays from map_layers, zoom-gated
+  GrovePngOverlay        (≥16) with active-grove focus at full opacity
+  AlertLayer /           stubs rendering empty FCs — wired, awaiting Phase-1/2 data
+  HarvestStatusLayer
+  TreeDetailDrawer       slide-in panel; fetches /api/trees/[code] on marker click
+  TreeFocusedMap         single-tree composition (detail page): crown + boundary + point
+```
+
+Data flows server→client as plain GeoJSON: `lib/maps/geojson.ts` shapes DB rows into `FeatureCollection`s (dropping null geometries — a mapped-count invariant worth testing), and `lib/db/trees.ts#listTreesForMap` joins each tree to its **latest** observation via `DISTINCT ON`. The manager map page assembles `{grovesFC, treesFC, overlays, config}` in one `Promise.all` and hands them to the client island, which owns filter state (grove/health/ancient/anomaly, URL-independent) and the drawer.
+
+The older `components/map/` (singular) directory is a separate, earlier stack: MapLibre + terra-draw for the grove boundary *editor* — kept because polygon drawing is genuinely better there.
+
+### 6.3 Photo pipeline (VTI Phase 0)
+
+```mermaid
+flowchart TD
+    A[Upload: drag-drop files<br/>POST /api/photos/upload] --> B[exifr: GPS + timestamp + camera]
+    B --> C[sharp: 512px JPEG thumbnail<br/>HEIC fails gracefully → sips backfill]
+    C --> D{EXIF GPS?}
+    D -- no --> U[status: unmatched]
+    D -- yes --> E[matchPhotoToTree<br/>PostGIS ST_DWithin 8m · geography distance]
+    E --> F{1 tree ≤3m AND<br/>next ≥4m farther?}
+    F -- yes --> G[auto_matched → entity_id set<br/>confidence ∝ proximity, cap 0.95]
+    F -- no, candidates --> H[needs_review + candidate list<br/>in match_metadata]
+    G & H & U --> I[(media row + files on disk<br/>id = filename UUID)]
+    H --> J[/photos/review queue:<br/>confirm candidate · type code · reject/]
+    J --> K[confirm/reject API →<br/>entity link + audit event]
+```
+
+Storage is local-filesystem (`lib/photos/storage.ts`, `UPLOADS_DIR`, default `./uploads/`) with DB-stored relative paths — designed so a swap to Supabase Storage touches one module. Serving goes through `/api/photos/[id]/{original,thumb}` (no static exposure of the uploads dir). The **media row id equals the file's UUID basename**, which is what made `scripts/reindex-photos.ts` possible: after the DB loss incident, all 245 photos were rebuilt from disk with URLs intact.
+
+Matching is **GPS-proximity only** in Phase 0 — no vision, no embeddings. The decision rule lives in [`lib/photos/matchDecision.ts`](../lib/photos/matchDecision.ts) as a **pure function** (thresholds: search 8 m, strict 3 m, separation 4 m, top-5, GPS-accuracy cap 10 m). Two signals joined 2026-08-12 (task #22), both precision-safe by construction: **EXIF GPS accuracy** (`GPSHPositioningError`, backfilled corpus-wide — p50 4.6 m, worst 4.1 km!) demotes auto-matches on bad fixes and warns in the review UI; **crown containment** (crowns are non-overlapping; 42 of 119 review photos sit inside exactly one) reorders review candidates and badges them, but never changes decisions. Promotion strategies are quantified read-only by `pnpm sweep:matching` (crown-promotion would take auto 44→83) and ship only when the A2 walk can measure their wrong-link rate with `match.ts` as a thin PostGIS wrapper — the split exists so the wrong-link-critical rule is unit-testable without infrastructure, and so the A3 drift harness (§6.7) can freeze its behavior. Uploads carry a batch **purpose tag** (`photo_purpose` enum, mirrored client-safely in `purposeTags.ts`), which is how field captures self-sort into eval golden sets (`pest`, `disease`, `pre_harvest`, …). The full vision design (Claude-based analysis, pgvector similarity) is specced in VISUAL_TREE_INTELLIGENCE.md; its *acceptance layer* is already built (§6.7) — the capabilities ship only when they pass it.
+
+### 6.4 Climate subsystem — with two field-tested fixes
+
+Two latent defects were found by the unit suite and fixed (2026-08-08), then all 360 season summaries re-derived: the **72h rolling-rain arm was dead code** (the dry-lookback included the accumulation days; now the lookback ends where the rain *event* begins — historical effect: season 1995's first rain moved from March back to November, season 1993 gained a first-rain date), and **pre-harvest windows were clipped to the season** (season ends Aug 31, Galilee harvest is Oct–Nov → always null; now computed over the full daily series).
+
+
+One-time (idempotent-intended) extraction, then read-only dashboards:
+
+```
+scripts/extract-climate-history.ts   CLI: --since/--until/--grove/--dry-run/--store-raw
+  └─ lib/climate/extract.ts          orchestrator:
+       1. groves → centroids (PostGIS ST_Centroid)
+       2. coalesce by 0.1° ERA5 grid cell — all 8 groves share ONE cell,
+          so one API call serves the estate; cell-mates reuse DB dailies
+       3. openMeteo.ts fetch (429-aware backoff, end-date clamped to T-1)
+       4. season.ts per season-year: first-rain (1/5/10/20mm + "significant"
+          rule: ≥5mm daily OR ≥10mm/72h after ≥14 dry days), window sums,
+          heat/frost days, dry spells   [pure functions — prime unit-test targets]
+       5. events.ts: typed rain_events detection
+       6. DB upserts + always-written CSV/manifest outputs (outputs/climate/)
+scripts/link-climate-rule-evidence.ts  maps summaries → rule_evidence rows for
+                                       first_rain · baal_rainfed · sanasil_terraces
+                                       · late_harvest (idempotent, checked inserts)
+```
+
+All thresholds and window definitions live in [`config/climate_thresholds.json`](../config/climate_thresholds.json) — editing it and re-running re-derives summaries from stored dailies without re-fetching. The `/manager/climate` page reads via `lib/db/climate.ts` (summaries, events, long-run norms for "vs average" deltas) and renders inline SVG (no chart library) — including the 45-year first-rain timeline.
+
+### 6.5 Tree registry & management
+
+Read path: `lib/db/trees.ts#listTrees` builds dynamic SQL from a typed filter object (grove, health bucket, verification, ancient, anomaly, has-photos, text search, 4 sort orders) with windowed `COUNT(*) OVER ()` pagination — the highest-combinatorics query in the app and a primary integration-test target. Write path: three server actions (`verifyTreeAction`, `editTreeAction`, `logObservationAction`) → Zod validation → `lib/db/trees.ts` mutation functions → **every mutation writes an `audit_events` row** with before/after. The UI exposes these as `QuickVerify` (inline in the registry list), `TreeManagePanel` (detail page: verification, variety, ancient, field tag, notes, age), and `ActivityTimeline` (renders the tree's audit history — "every change is remembered" is a UI promise backed by the audit table).
+
+### 6.6 Heritage rules & evidence
+
+The differentiating layer per SPEC: rules are *data* (`heritage_rules`), evidence is *links* (`rule_evidence`, polymorphic). Currently the only automated evidence producer is the climate linker (1,072 rows); the design intent is that every future subsystem (treatments, harvest, lab) writes evidence rows the same way, letting `/manager/rules` grow from a static page into a living dossier per rule.
+
+### 6.7 Quality & evaluation infrastructure
+
+Built test-first per the two test plans; this is the acceptance layer that gates every intelligence feature. Four tiers, by cost:
+
+```
+FREE, EVERY CI RUN (pnpm test — 131 tests, no DB, no network)
+├── unit suites: match decision table · climate season math · EXIF · GeoJSON
+├── contract tests: evals/schemas.ts — honesty rules as parse failures
+│     (no kg in yield · closed pest enum · no irrigation advice in stress ·
+│      pruning yes⇒reasons · abstention first-class everywhere)
+├── A3 scenario drift: 22 committed candidate-distance scenarios diffed
+│     against a frozen decision baseline — any flip fails CI until
+│     `pnpm baseline:matching` regenerates it IN THE SAME PR
+├── B2 consistency: temporal monotonicity (BBCH order per tree-season,
+│     phenology season = Dec→Nov) + Galilee calendar plausibility
+├── B5 fusion truth table: all 20 (stress × climate) rows pinned +
+│     invariants (intervention reachable from exactly one row; photo alone
+│     can never escalate past "inspect")
+└── eval scoring on committed cached responses (replay mode)
+
+FREE, ON DEMAND (needs local DB)
+├── pnpm drift:matching — recomputes the REAL pipeline (PostGIS + rule) for
+│     all 170 GPS photos vs a frozen per-photo baseline; catches SQL,
+│     threshold, and registry-coordinate drift; corpus growth warns,
+│     decision changes fail
+├── pnpm db:doctor — 7 read-only production invariants (climate key dupes,
+│     photo↔file bijection, spatial sanity, referential strays, summary
+│     consistency…); the checker is itself integration-tested; first live
+│     run 7/7 PASS
+└── pnpm backup -- --verify — restore drill into a scratch DB
+
+OWNER TIME (the scarce resource — labels are the bottleneck, not code)
+└── pnpm label -- --capability <flowering|yield|pruning|pest|stress>
+      keystroke labeling → evals/golden/<cap>/labels.json (resume-safe,
+      ~200 labels/hr; configs pinned to the capability schemas by tests)
+
+BUDGETED $ (manual, pinned)
+└── pnpm eval -- --capability <name> --live — fills the response cache with
+      claude-opus-5 under a versioned prompt (pins hashed into every cache
+      entry and report; a prompt/model change auto-stales the cache).
+      Free-form JSON validated CLIENT-side so honesty violations are
+      observed-and-scored, not made impossible; refusals are first-class
+      outcomes; NO fallback models (the pinned model is the thing under test).
+```
+
+Scoring (`evals/harness/score.ts`, pure) implements the B1–B5 gates with n-thresholds — a gate without enough data renders **⏳ insufficient**, never a fake pass/fail. Reports are timestamped and committed; the trend history is the point.
+
+---
+
+## 7. Request/data flow summary
+
+| Flow | Path |
+| --- | --- |
+| Page render | RSC page → `lib/db/*` query fns (raw SQL via postgres-js) → parse to typed rows → props to client island |
+| Map interaction | client island filter state → layer components → `MapAdapter` calls → Leaflet/Google |
+| Tree drawer | marker click → `GET /api/trees/[code]` → `getTreeDetail` (tree + observations) |
+| Photo upload | multipart POST → EXIF/thumb/match in-route → media row + files → per-file result JSON |
+| Manage mutation | client form → server action (Zod) → mutation fn + audit row → `revalidatePath` |
+| Bulk data | CLI scripts (own postgres-js connection, `dotenv`) — never through Next |
+
+---
+
+## 8. External dependencies & the honesty contract
+
+| Dependency | Used by | Failure mode & posture |
+| --- | --- | --- |
+| Open-Meteo (ERA5) | climate extract only | Rate-limited (429 backoff); never in request path; raw responses storable for provenance |
+| OSM / Esri tiles | browser map | Cosmetic degradation only |
+| Google Maps JS | map (optional) | Absent key → Leaflet; no server dependency |
+| Homebrew Postgres | everything | Single point of failure; survives reboot as a service; **backup drill specced in TEST_PLAN §7.2, not yet implemented** |
+| Local filesystem (`uploads/`) | photos | Files outlive DB rows (proven by the reindex incident — treated as a feature) |
+| QGIS + QField (adopted, [ALTERNATIVES_REUSE §3.2](ALTERNATIVES_REUSE.md)) | field campaigns | Offline capture on the owner's phone against exported tree/grove GeoPackages; results re-enter through an audited import script — the platform never depends on it at runtime |
+| Copernicus CDSE (Statistical API) — **live** | `pnpm ndvi:fetch` | Free Sentinel-2 NDVI, server-side per grove polygon; 587 monthly intervals (2019→2026) across all 8 groves; script-side only, month-anchored idempotent upserts. **10 m pixels ⇒ grove-level claims only** — per-tree stays VHR |
+
+**Provenance vocabulary is load-bearing.** These rules are enforced in copy and schema, and any new feature must keep them: satellite values are *"signals — field verification required"*, never diagnoses; climate is a *"regional / grove-centroid estimate"* (~11 km grid — the whole estate sits in one cell, so inter-grove climate differences are **not** claimable); `map_layers` separates source/display/analysis resolution so resampled imagery can't masquerade as higher-precision analysis; ages are estimates; a future vision confidence score routes review, it does not conclude.
+
+---
+
+## 9. Operational tooling
+
+**Package scripts:** `dev` · `build` · `typecheck` · `test`/`test:watch`/`test:unit` (Vitest) · `db:generate`/`db:migrate`/`db:studio` (drizzle-kit) · `db:seed` · `climate:extract` · `climate:link-evidence` · `photos:reindex` · `baseline:matching` + `drift:matching` (A3) · `label` (owner labeling CLI) · `eval` + `eval:matching` (capability evals / A2 benchmark) · `qfield:export`/`qfield:package`/`qfield:import` (field-campaign bridge — packaging runs headless PyQGIS) · `ndvi:fetch` (CDSE grove NDVI) · `db:doctor` (invariant checker) · `test:db` + `db:check-drift` (integration tier / migration lockstep) · `backup` (also daily via LaunchAgent, 21:00). Docker-era scripts and docker-compose.yml were removed after the .env-clobber incident.
+
+**Environment** (`.env`, gitignored): `DATABASE_URL` (currently `postgres://basmakhalaf@localhost:5432/ancientgroveos`) · `UPLOADS_DIR` · `CLIMATE_OUT_DIR` · `REPLIT_BASELINE_DIR` (seed source, defaults to the owner's ReplitPrep output) · `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`/`GOOGLE_MAP_ID` (optional) · `EARTH_ENGINE_ENABLED`/`GOOGLE_3D_TILES_ENABLED` (reserved, false).
+
+**Data lineage:** groves/trees/observations originate from the owner's Python remote-sensing pipeline (`~/ReplitPrep`, manifest-driven GeoJSON/CSV) → `seed.ts` (upsert-by-code, rerun-safe). Photos originate from field capture → upload or `reindex-photos.ts`. Climate originates from Open-Meteo → extract. **Field-campaign data** (verification walk, A2 matching gold labels) originates from QField capture against exported GeoPackages → a planned audited import script (`geo:export-qfield` / `geo:import-qfield`) — same one-way-in-through-scripts posture as every other bulk source. **Scripts under `scripts/*.py` are the owner's exploratory pipeline helpers** (photo grouping, grove PNG processing) — outside the tested product surface by policy.
+
+---
+
+## 10. Cross-cutting concerns & known debt
+
+**Audit trail** — append-only `audit_events` written by every mutation path (app-level wrapper, no triggers, by design: greppable logic). Seed/import operations log summary events.
+
+**Idempotency** — a stated contract for all scripts: seed upserts by code; reindex skips existing ids; climate dailies upsert against real unique indexes (fixed + proven, migration 0005); summaries delete-then-insert (safe in itself, but see the evidence-orphaning wart in §5).
+
+**Error philosophy** — server actions return typed errors, never throw to client; upload processes files independently (one bad file can't sink a batch); EXIF/thumbnail failures degrade to nulls rather than rejecting the photo.
+
+**Resolved since v1.0** *(kept for the record — these were the top of the old debt list)*: first commit + GitHub remote + `phase-0-baseline` tag ✅ · the unit/contract/drift test tiers ✅ · fake-unique climate indexes → real (migration 0005, proven live) ✅ · backup automation with a passed restore drill ✅ · two latent climate-math defects found by the new tests and fixed (72h rolling arm, pre-harvest clipping) ✅ · summary-id durability + evidence-link reconciliation (task #9) ✅.
+
+**Current debt, ranked:**
+
+1. **No auth** on any route/action — acceptable on localhost, **blocking for any network exposure** (AGRONOMY_OPERATIONS preflight step 4; the users/roles tables exist, unused).
+2. **Tree-registry reconciliation** — architecture reports 1,326 registered trees; prior estate planning used 1,149. Must be reconciled before operational records attach permanently (AGRONOMY_OPERATIONS §14.1).
+3. **Single-date satellite data** — the schema is time-series-ready; the ingest and the "anomaly spreading over passes" analysis (the highest-value xFarm idea, externally benchmarkable against OQDS-Insight) don't exist yet. Now planned as **two honest tiers** (ALTERNATIVES_REUSE §3.3): a free grove-level Sentinel-2 NDVI series via CDSE openEO (small tranche — script + one table + climate-page panel), and the per-tree VHR flagship.
+4. **No operations tables** (activities/incidents/traps/samples/treatments/harvest) — the record layer is fully designed (AGRONOMY_OPERATIONS PR1–8) but spec-only.
+5. **Matching ground truth is thin** — 1 human-confirmed match; the A2 benchmark needs the owner's review-queue hour + the **QField-based staged field walk** (tree code pre-filled from the tapped feature — no transcription errors) before wrong-link rate is *measured* rather than protected-by-drift.
+6. **E2E tier unbuilt** — integration (`pnpm test:db`: 27 tests on a real PostGIS `ancientgroveos_test`, auto-created/migrated, `_test` name-guard) and CI (`.github/workflows/ci.yml`: typecheck + drift-check + unit + integration + build on `postgis/postgis:17-3.5`) landed 2026-08-09; Playwright smokes, upload-route tests, and the seed mini-baseline remain (TEST_PLAN §4.6–4.8).
+7. Photos have no off-machine backup copy until iCloud quota is confirmed (BACKUP.md gap #1). (The stale Docker scripts are gone — removed with the compose file after they caused the .env-clobber incident.)
+
+**Extension pattern for new domains** (what Phase 1 should follow): add tables to `schema.ts` → `drizzle-kit generate`+`migrate` → new `lib/db/<domain>.ts` with typed query/mutation fns (mutations write audit rows, evidence links where relevant) → server actions with Zod → RSC page + client island under the brand shell → sidebar entry → idempotent script if bulk data is involved → tests per TEST_PLAN standing rules.

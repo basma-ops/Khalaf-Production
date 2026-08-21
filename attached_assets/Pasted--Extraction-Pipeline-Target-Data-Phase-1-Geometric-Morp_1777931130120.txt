@@ -1,0 +1,29 @@
+**Extraction Pipeline & Target Data:**
+
+**Phase 1: Geometric & Morphological Canopy Extraction**
+*Utilize instance segmentation to separate the olive crown and trunk from the background.*
+*   **Tree Height:** Calculate from the lowest visible trunk point to the highest canopy apex (in meters).
+*   **Trunk Diameter:** Measure the stem diameter at 30cm above the soil line.
+*   **Canopy Width/Spread:** Calculate the maximum 2D projected width.
+*   **Canopy Volume & Surface Area:** Estimate using a 3D bounding hull generated from multi-view spatial overlap.
+*   **Foliage Density/Porosity:** Estimate the ratio of sky visible through the canopy versus solid leaf mass.
+
+**Phase 2: Yield Estimation & Fruit Analytics**
+*Detect and analyze fruit clusters on the exposed canopy faces.*
+*   **Visible Fruit Count:** Provide an absolute count of visible olives.
+*   **Exposed Fruit Area:** Calculate the total pixel area occupied by visible fruit, translated to real-world dimensions.
+*   **Fruit Dispersion/Aggregation Index:** Quantify how tightly clustered the fruits are.
+*   **Estimated Total Yield:** Extrapolate total fruit weight (kg) based on visible count, variety weight, and canopy volume.
+
+**Phase 3: Health, Vigor, and Stress Assessment**
+*Analyze spectral/colorimetric cues in the RGB data.*
+*   **Leaf Color/Chlorophyll Estimation:** Analyze green-channel intensity to estimate vigor (detecting chlorosis).
+*   **Pest/Disease Detection:** Identify visual markers of pathogens (e.g., Olive knot, Peacock spot).
+*   **Pruning Assessment:** Identify dead wood or overly dense interior canopies.
+
+**Phase 4: Visual Overlay Generation (The HUD)**
+*Map the extracted data points back onto the 2D image coordinates to generate an annotated visual output.*
+*   **Bounding Volumes:** Define coordinates for a wireframe representing the canopy boundaries.
+*   **Measurements:** Define line vectors and text anchor points for Tree Height, Trunk Diameter, and Canopy Width.
+*   **Fruit Density Heatmap:** Define bounding box regions for fruit clusters to be overlaid with a thermal/density color gradient.
+*   **Health Callouts:** Define pointer coordinates connecting detected pathogen/health areas to informational text boxes.

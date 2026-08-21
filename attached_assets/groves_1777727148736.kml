@@ -1,0 +1,319 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+<Document id="1v6ysokiD7S1do6ynjnJKztKGmK_T8f6G">
+	<name>Rameh</name>
+	<gx:CascadingStyle kml:id="__managed_style_233159576E3F1D64FEE7">
+		<styleUrl>https://earth.google.com/balloon_components/base/1.1.0.0/card_template.kml#main</styleUrl>
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LabelStyle>
+			</LabelStyle>
+			<LineStyle>
+				<color>ff2dc0fb</color>
+				<width>3</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>40ffffff</color>
+			</PolyStyle>
+			<BalloonStyle>
+			</BalloonStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_1668BC902D3F1D64FEE7">
+		<styleUrl>https://earth.google.com/balloon_components/base/1.1.0.0/card_template.kml#main</styleUrl>
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LabelStyle>
+			</LabelStyle>
+			<LineStyle>
+				<color>ff2dc0fb</color>
+				<width>2</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>40ffffff</color>
+			</PolyStyle>
+			<BalloonStyle>
+			</BalloonStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="__managed_style_08431BFC9A3F1D64FEE7">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_1668BC902D3F1D64FEE7</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_233159576E3F1D64FEE7</styleUrl>
+		</Pair>
+	</StyleMap>
+	<gx:CascadingStyle kml:id="__managed_style_2EBDFC72BD3F1D64FEE6">
+		<Style>
+			<IconStyle>
+				<scale>1.2</scale>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LabelStyle>
+			</LabelStyle>
+			<LineStyle>
+				<color>ff2dc0fb</color>
+				<width>3</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>40ffffff</color>
+			</PolyStyle>
+			<BalloonStyle>
+			</BalloonStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<gx:CascadingStyle kml:id="__managed_style_1AD793B1653F1D64FEE6">
+		<Style>
+			<IconStyle>
+				<Icon>
+					<href>https://earth.google.com/earth/document/icon?color=1976d2&amp;id=2000&amp;scale=4</href>
+				</Icon>
+				<hotSpot x="64" y="128" xunits="pixels" yunits="insetPixels"/>
+			</IconStyle>
+			<LabelStyle>
+			</LabelStyle>
+			<LineStyle>
+				<color>ff2dc0fb</color>
+				<width>2</width>
+			</LineStyle>
+			<PolyStyle>
+				<color>40ffffff</color>
+			</PolyStyle>
+			<BalloonStyle>
+			</BalloonStyle>
+		</Style>
+	</gx:CascadingStyle>
+	<StyleMap id="__managed_style_0AD1446D043F1D64FEE6">
+		<Pair>
+			<key>normal</key>
+			<styleUrl>#__managed_style_1AD793B1653F1D64FEE6</styleUrl>
+		</Pair>
+		<Pair>
+			<key>highlight</key>
+			<styleUrl>#__managed_style_2EBDFC72BD3F1D64FEE6</styleUrl>
+		</Pair>
+	</StyleMap>
+	<Folder id="00A6507BA3364EB63A6A">
+		<name>Untitled folder</name>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+	</Folder>
+	<Placemark id="0FF543CF21364EB66E0C">
+		<name>Khalaf Olives</name>
+		<LookAt>
+			<longitude>35.3919936688485</longitude>
+			<latitude>32.92688348786655</latitude>
+			<altitude>308.7164569763154</altitude>
+			<heading>0</heading>
+			<tilt>0</tilt>
+			<gx:fovy>35</gx:fovy>
+			<range>600.6554605026032</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Point>
+			<coordinates>35.39235239412311,32.92651406513986,306.5314665386759</coordinates>
+		</Point>
+	</Placemark>
+	<Placemark id="09E014B2A8364EB7D0FA">
+		<name>Moran</name>
+		<LookAt>
+			<longitude>35.39321044260771</longitude>
+			<latitude>32.92596772061682</latitude>
+			<altitude>303.9542230183961</altitude>
+			<heading>359.9999991404968</heading>
+			<tilt>0</tilt>
+			<gx:fovy>35</gx:fovy>
+			<range>1185.894294435857</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.39256162766752,32.92628727267438,0 35.39281342577698,32.92656820859904,0 35.39295833254954,32.92698571337426,0 35.39292617749812,32.92770126727649,0 35.39141786169652,32.92794663338124,0 35.39137969719904,32.92796158510366,0 35.39135209119316,32.92797494656198,0 35.39124214670814,32.92798116270738,0 35.39118627077207,32.92796192692051,0 35.39117831508779,32.92791311326027,0 35.39116003914734,32.92752490030587,0 35.39133656189703,32.927474380915,0 35.39146548191739,32.92743453750118,0 35.39157235830669,32.92766632317474,0 35.39167909810017,32.92743398739893,0 35.39181728482207,32.92747874155599,0 35.39203955570834,32.92738825751832,0 35.39204227076512,32.92705891377081,0 35.39220008655725,32.92695907538228,0 35.39239106524295,32.92696698039477,0 35.3926674813009,32.92686556927892,0 35.39264226654596,32.92671265984975,0 35.3922058144146,32.92663832255593,0 35.39209417777009,32.92643407869228,0 35.3911361701956,32.92639506712325,0 35.39115046520615,32.92605658151617,0 35.39177468658063,32.92604726675106,0 35.39211776911765,32.92593828762571,0 35.39256162766752,32.92628727267438,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+	<Placemark id="04C8882452364F694766">
+		<name>Menezleh</name>
+		<LookAt>
+			<longitude>35.36871189000347</longitude>
+			<latitude>32.93357846395189</latitude>
+			<altitude>361.3004476570703</altitude>
+			<heading>0.02831904271066937</heading>
+			<tilt>0</tilt>
+			<gx:fovy>30</gx:fovy>
+			<range>895.0515795257525</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.36738583092277,32.93335244991828,0 35.36747019741467,32.93344096448238,0 35.36743897121548,32.933634923539,0 35.36741249978737,32.93381035145664,0 35.36760855733009,32.93391094699854,0 35.36729436673393,32.93443244789132,0 35.36692829179115,32.93362704693281,0 35.36738583092277,32.93335244991828,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+	<Placemark id="0552169701364F6F4D9B">
+		<name>Almafareq</name>
+		<LookAt>
+			<longitude>35.37703680910047</longitude>
+			<latitude>32.93060992153447</latitude>
+			<altitude>354.5906909868415</altitude>
+			<heading>0.02831903703501975</heading>
+			<tilt>0</tilt>
+			<gx:fovy>30</gx:fovy>
+			<range>1112.955594485829</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.37544932400574,32.9293492020479,0 35.37604857197176,32.92916269422071,0 35.37605302644124,32.92940061739615,0 35.37608825497163,32.92956464730111,0 35.37640679021344,32.92956263118316,0 35.37655139222098,32.92966389863113,0 35.37686325541365,32.92953930080879,0 35.37703969741612,32.93017368230527,0 35.37558404564488,32.93030945769012,0 35.37544932400574,32.9293492020479,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+	<Placemark id="024E84526D364F70EC64">
+		<name>Ein Ateyye</name>
+		<LookAt>
+			<longitude>35.40279343427903</longitude>
+			<latitude>32.9129121021409</latitude>
+			<altitude>266.0182673918983</altitude>
+			<heading>0.02831902501447916</heading>
+			<tilt>0</tilt>
+			<gx:fovy>30</gx:fovy>
+			<range>1042.09713043354</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.4034261646364,32.91251312711409,0 35.40222073653432,32.91331657622231,0 35.40152096000394,32.9123731991928,0 35.40229137110645,32.91163128976164,0 35.40286058352819,32.91153860563691,0 35.4034261646364,32.91251312711409,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+	<Placemark id="00FBFDFA07364F7FECF1">
+		<name>Thoelieb</name>
+		<LookAt>
+			<longitude>35.39993089105551</longitude>
+			<latitude>32.92065582984414</latitude>
+			<altitude>285.5770495909264</altitude>
+			<heading>0.7605624613799103</heading>
+			<tilt>1.71351792447097</tilt>
+			<gx:fovy>30</gx:fovy>
+			<range>927.3231417703212</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_08431BFC9A3F1D64FEE7</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.40060810463796,32.92036781673598,0 35.39964787821401,32.92119951617319,0 35.39927269362052,32.92089718685857,0 35.40014309389635,32.92017864046387,0 35.40057221430306,32.91933150654964,0 35.40247665136595,32.9195527627428,0 35.40140408676867,32.92032961575165,0 35.40172245960488,32.9206077503555,0 35.40157413974775,32.92067985032594,0 35.4014266267322,32.92075158380189,0 35.40122102746999,32.92049432703796,0 35.40060810463796,32.92036781673598,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+	<Placemark id="0F92EEBFBE364F847FB3">
+		<name>Seret Al Ajoul &amp; AbuMrad</name>
+		<LookAt>
+			<longitude>35.40367970744147</longitude>
+			<latitude>32.91934525080926</latitude>
+			<altitude>275.0044366250072</altitude>
+			<heading>0.7605617622649122</heading>
+			<tilt>1.713436675510759</tilt>
+			<gx:fovy>30</gx:fovy>
+			<range>625.1361972087761</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.40287440279442,32.91924877095404,0 35.40311899688631,32.9189697931727,0 35.40426520935336,32.91930640778338,0 35.40567155100435,32.91867676608309,0 35.40535586258061,32.91826419103689,0 35.40590497184154,32.9179725511683,0 35.40628494104238,32.91871179870466,0 35.40682057923883,32.91856412816199,0 35.40732433551673,32.91841949820653,0 35.40734348147992,32.91862342628827,0 35.40733908541445,32.91889622926661,0 35.40653379701673,32.91910482008,0 35.40468841648686,32.91984758955993,0 35.40459034800898,32.91950378911416,0 35.40422332415629,32.91953290387886,0 35.40420646755044,32.9199913685927,0 35.40397126902041,32.92008488118309,0 35.40382973806157,32.91990324881688,0 35.40301859484133,32.92002773536642,0 35.40321965856883,32.91938735885257,0 35.40287440279442,32.91924877095404,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+	<Placemark id="0CAFEED520364F8A7962">
+		<name>At3et Al Nakhle</name>
+		<LookAt>
+			<longitude>35.39374467148399</longitude>
+			<latitude>32.92728246814323</latitude>
+			<altitude>308.4357394346734</altitude>
+			<heading>0.7605613308058787</heading>
+			<tilt>1.713386277061805</tilt>
+			<gx:fovy>30</gx:fovy>
+			<range>437.6933422072761</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.39436177918682,32.92729008007736,0 35.39435783322033,32.92761599954736,0 35.39345829894051,32.92760740739779,0 35.39334596888913,32.9272394825276,0 35.39355465614051,32.92708956090785,0 35.39380173144279,32.92698666810674,0 35.39386361324247,32.92722449434032,0 35.39399059781521,32.92724577477083,0 35.39398211185478,32.92733399767365,0 35.39425672033339,32.92731110509204,0 35.39436177918682,32.92729008007736,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+	<Placemark id="0B345D0BEC364F8FA60C">
+		<name>Roes AlMal</name>
+		<LookAt>
+			<longitude>35.38883084306523</longitude>
+			<latitude>32.92122066929827</latitude>
+			<altitude>325.2256232247617</altitude>
+			<heading>0.7605614734520116</heading>
+			<tilt>1.713446894114226</tilt>
+			<gx:fovy>35</gx:fovy>
+			<range>582.7547978994698</range>
+			<altitudeMode>absolute</altitudeMode>
+		</LookAt>
+		<styleUrl>#__managed_style_0AD1446D043F1D64FEE6</styleUrl>
+		<Polygon>
+			<outerBoundaryIs>
+				<LinearRing>
+					<coordinates>
+						35.38815196876677,32.9208286851426,0 35.38790132136146,32.92031192388937,0 35.38844712464585,32.92015783408425,0 35.38862032967513,32.92057557974826,0 35.38885781835701,32.92074617731444,0 35.38860402174396,32.92105198511846,0 35.3886042698941,32.92105281029605,0 35.38815196876677,32.9208286851426,0 
+					</coordinates>
+				</LinearRing>
+			</outerBoundaryIs>
+		</Polygon>
+	</Placemark>
+</Document>
+</kml>

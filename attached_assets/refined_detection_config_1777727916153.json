@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "thresholds": {
+    "global": {
+      "n_accepted": 0,
+      "n_rejected": 44,
+      "min_crown_area_m2": null,
+      "max_crown_area_m2": null,
+      "typical_crown_diameter_m": null,
+      "shadow_fraction_max_acceptable": null,
+      "fragmentation_score_max_acceptable": null,
+      "canopy_density_score_min_acceptable": null
+    },
+    "per_grove": {
+      "ALMAFAREQ": {
+        "n_accepted": 0,
+        "n_rejected": 4,
+        "min_crown_area_m2": null,
+        "max_crown_area_m2": null,
+        "typical_crown_diameter_m": null,
+        "shadow_fraction_max_acceptable": null,
+        "fragmentation_score_max_acceptable": null,
+        "canopy_density_score_min_acceptable": null
+      },
+      "EIN_ATEYYE": {
+        "n_accepted": 0,
+        "n_rejected": 5,
+        "min_crown_area_m2": null,
+        "max_crown_area_m2": null,
+        "typical_crown_diameter_m": null,
+        "shadow_fraction_max_acceptable": null,
+        "fragmentation_score_max_acceptable": null,
+        "canopy_density_score_min_acceptable": null
+      },
+      "MORAN": {
+        "n_accepted": 0,
+        "n_rejected": 15,
+        "min_crown_area_m2": null,
+        "max_crown_area_m2": null,
+        "typical_crown_diameter_m": null,
+        "shadow_fraction_max_acceptable": null,
+        "fragmentation_score_max_acceptable": null,
+        "canopy_density_score_min_acceptable": null
+      },
+      "SERET_AL_AJOUL_A": {
+        "n_accepted": 0,
+        "n_rejected": 11,
+        "min_crown_area_m2": null,
+        "max_crown_area_m2": null,
+        "typical_crown_diameter_m": null,
+        "shadow_fraction_max_acceptable": null,
+        "fragmentation_score_max_acceptable": null,
+        "canopy_density_score_min_acceptable": null
+      },
+      "THOELIEB": {
+        "n_accepted": 0,
+        "n_rejected": 7,
+        "min_crown_area_m2": null,
+        "max_crown_area_m2": null,
+        "typical_crown_diameter_m": null,
+        "shadow_fraction_max_acceptable": null,
+        "fragmentation_score_max_acceptable": null,
+        "canopy_density_score_min_acceptable": null
+      }
+    }
+  },
+  "false_positive_summary": {
+    "n_rejected": 44,
+    "crown_area_m2": {
+      "mean": 71.347,
+      "median": 20.625,
+      "p10": 4.825,
+      "p90": 175.45
+    },
+    "pan_ndvi_mean": {
+      "mean": 0.336,
+      "median": 0.327,
+      "p10": 0.274,
+      "p90": 0.388
+    },
+    "shadow_fraction": {
+      "mean": 0.0,
+      "median": 0.0,
+      "p10": 0.0,
+      "p90": 0.0
+    },
+    "fragmentation_score": {
+      "mean": 0.184,
+      "median": 0.183,
+      "p10": 0.0,
+      "p90": 0.386
+    }
+  },
+  "missed_tree_summary": {
+    "per_grove": {
+      "MORAN": 29,
+      "MENEZLEH": 2,
+      "ALMAFAREQ": 20,
+      "EIN_ATEYYE": 8,
+      "THOELIEB": 2,
+      "SERET_AL_AJOUL_A": 33,
+      "AT3ET_AL_NAKHLE": 4,
+      "ROES_ALMAL": 5
+    },
+    "total_manual_added": 103
+  },
+  "classifier_metadata": null
+}

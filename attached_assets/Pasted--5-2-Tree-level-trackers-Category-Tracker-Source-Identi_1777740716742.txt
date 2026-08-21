@@ -1,0 +1,74 @@
+### 5.2 Tree-level trackers
+
+| Category | Tracker | Source |
+| --- | --- | --- |
+| **Identity** | Tree code, GPS, grove, row/position (optional), variety, age estimate, ancient status, planting date if known | Registry |
+| | Field tag (durable code, optional QR) | Registry |
+| | Photos over time (geotagged, timestamped) | Photo timeline |
+| **Geometry & growth** | Trunk diameter (mm) at standard height — measured annually | Field measurement |
+| | Canopy diameter (m) | Field measurement, twice yearly (pre/post pruning) |
+| | Tree height (m) | Field measurement |
+| | Crown polygon and crown area (m²) | Satellite-derived, field-correctable |
+| | Crown volume estimate | Computed |
+| **Phenology** | Current BBCH stage | Field observation |
+| | Date of bud break, flowering, fruit set, veraison for this tree (when individually noted) | Calendar |
+| **Health & stress** | Latest health index (0–100) | Computed from satellite + field |
+| | Visible stress signs (drought, chlorosis, leaf curl, dieback) | Field visit |
+| | NDVI / GNDVI / SAVI per imagery date | Satellite import |
+| **Pest & disease** | Pest signs found (species, severity, date) | Scouting record |
+| | Disease signs found (peacock spot, verticillium, knot, anthracnose) | Scouting record |
+| | Treatments applied (when tree-specific) | Treatment log |
+| **Operations** | Pruning history (date, type, severity) | Activity log |
+| | Pruning need flag | Field visit |
+| | Damage events (broken branch, lightning, animal, mechanical) | Incident record |
+| **Yield** | Harvest events per season | Harvest module |
+| | Boxes per harvest event, weight per box | Harvest module |
+| | Estimated yield (kg) per season | Computed |
+| | Multi-year yield trend, alternate bearing pattern | Computed |
+| | Maturity index at harvest (sampled per tree or per zone) | Sampling record |
+| **Inputs** (when tree-specific) | Foliar applications | Treatment log |
+| | Soil amendments | Treatment log |
+| **Lab** (rare, only when tree-sampled) | Tree-specific oil quality | Lab module |
+| **Notes & status** | Verification status (`unverified / field-verified / disputed / removed`) | Field visit |
+| | Free-text notes | Anywhere |
+| **Sensors (Phase 2)** | Trunk dendrometer readings (water stress indicator) | Sensor stream |
+| | Tree-mounted camera frames | Sensor stream |
+| | Nearby soil moisture (linked) | Sensor stream |
+
+---
+
+## 6. Modules
+
+The trackers in §5 are populated through these modules.
+
+### 6.1 Grove Registry
+Boundary geometry, area, slope, orientation, terraces, soil profile, planting layout, heritage notes (cultivar, family history, terrace style, age estimate). Aggregate counts and status surfaces.
+
+### 6.2 Tree Registry
+Searchable index of every tree. Tree detail page is the heart of the product:
+
+- Map with tree highlighted in grove context.
+- Photo timeline (geotagged, dated; swipeable).
+- Geometry & growth (trunk diameter, canopy, height) trended.
+- Phenology timeline.
+- Health index trend with annotations (pest finds, treatments, drought events).
+- Field visits list.
+- Pest & disease finds list.
+- Treatment log.
+- Harvest history (boxes, weight, year-over-year, batches it joined).
+- Sensor readings panel (Phase 2).
+- Heritage rule evidence linkage.
+- Notes and tags.
+
+**Tree types:** olive, fig, carob, other, unknown. Fig and carob coexist with olives because of trap-tree and soil-partner heritage rules.
+
+**Field identification:** GPS proximity match (default radius 5 m) + manual confirmation against the latest photo. Optional `field_tag` for QR or painted code.
+
+### 6.3 Photo Library
+Photos are first-class. Every photo is associated with:
+
+- A tree (or grove, or zone).
+- A timestamp.
+- GPS at time of capture (when available).
+- A purpose tag (`general`, `pre_harvest`, `box`, `pest`, `disease`, `damage`, `pruning_before`, `pruning_after`, `growth`).
+- An optional linked entity (visit, harvest event, scouting record, treatment).

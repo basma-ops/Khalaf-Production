@@ -1,0 +1,898 @@
+Build the first production-quality version of “Khalaf Olive Groves”.
+
+Product concept:
+Khalaf Olive Groves is an AI-assisted ancient olive grove management system — a modern interface for ancient olive trees.
+
+It turns satellite-derived tree mapping, field-worker observations, harvest traceability, family heritage rules, and lab results into one shared operational database for managing ancient Souri olive groves.
+
+Core story:
+Some of the olive trees are ancient, potentially hundreds to over a thousand years old. The grove is not just a farm; it is a living archive of Mediterranean agricultural intelligence.
+
+The system is based on four evidence sources:
+1. Family memory and inherited grove rules.
+2. Per-tree GPS/tree/canopy/health data.
+3. Satellite remote sensing from Pléiades 0.5m pansharpened and 2m analytic imagery.
+4. Independent laboratory analysis of olive oil quality.
+
+These sources discipline each other over time:
+family memory tells us what to look for;
+satellite data detects patterns;
+field workers validate what is happening on the ground;
+harvest records connect trees to yield;
+lab results confirm oil-quality outcomes.
+
+Architecture:
+Build one shared backend API and one shared PostgreSQL database as the single source of truth.
+
+Build two frontend applications on top of that shared backend:
+
+1. Manager Dashboard
+Route: /manager
+Audience: owner, manager, agronomist.
+Purpose: analyze groves, trees, satellite alerts, heritage rules, tasks, field visits, harvest records, batches, pressing runs, oil batches, and lab results.
+
+2. Field Worker App
+Route: /field
+Audience: field workers using mobile phones in the grove.
+Purpose: complete monitoring tasks, inspect trees/zones, upload photos, validate satellite alerts, and during harvest season record tree-level harvest traceability.
+
+For the MVP, implement both frontends in the same Replit app/codebase, but structure the code clearly:
+- shared backend API
+- shared PostgreSQL database
+- manager frontend
+- field worker frontend
+- shared types/components where useful
+
+Preferred stack:
+- React + TypeScript frontend
+- Node/Express backend or similar
+- PostgreSQL database
+- Drizzle ORM or Prisma
+- Leaflet for geospatial maps
+- Responsive mobile-first design for /field
+- Desktop-first but responsive design for /manager
+- Store geometries as GeoJSON JSONB plus latitude/longitude columns for MVP. Do not require PostGIS yet.
+- Use Replit App Storage or local upload directory for photos/files if available, but store file metadata in PostgreSQL.
+
+Important:
+Do NOT process raw satellite GeoTIFFs in this app.
+The initial satellite analysis and manual correction workflow are handled by a standalone geospatial pipeline.
+This Replit app imports and manages the corrected outputs.
+
+Input files I will upload later:
+- groves.geojson
+- corrected_trees.geojson
+- corrected_tree_satellite_observations.csv
+- corrected_satellite_alerts.geojson
+- imagery_acquisitions.json
+- correction_summary.csv
+- import_manifest.json
+
+Optional later:
+- lab_results.csv
+- harvest data CSVs
+- field worker photos
+- heritage rule notes
+
+Do not assume a fixed tree count such as 1,149.
+The true tree inventory comes from the corrected imported tree registry and later field verification.
+
+Create an import workflow:
+1. Add an admin/import page or CLI import script.
+2. Import groves.geojson into groves table.
+3. Import corrected_trees.geojson into trees table.
+4. Import corrected_tree_satellite_observations.csv into tree_satellite_observations table.
+5. Import corrected_satellite_alerts.geojson into satellite_alerts table.
+6. Import imagery_acquisitions.json into imagery_acquisitions table.
+7. Preserve source file, import timestamp, source image ID, and provenance.
+8. Prevent duplicate imports by source image ID where possible.
+9. Never overwrite historical satellite observations.
+10. New imagery imports should create new imagery_acquisition and tree_satellite_observation records.
+
+Database tables:
+
+users
+- id
+- name
+- role: admin, manager, field_worker, supervisor
+- email nullable
+- phone nullable
+- active
+- created_at
+
+groves
+- id
+- grove_code
+- name
+- boundary_geojson
+- area_ha
+- centroid_lat
+- centroid_lon
+- notes
+- heritage_notes
+- created_at
+- updated_at
+
+imagery_acquisitions
+- id
+- image_id
+- provider
+- sensor
+- product_type
+- acquisition_date
+- resolution_m
+- bands_available
+- cloud_percent nullable
+- source_file
+- metadata_json
+- notes
+- created_at
+
+trees
+- id
+- tree_code
+- grove_id
+- tree_type: olive, fig, carob, other, unknown
+- variety: Souri, other, unknown
+- ancient_status: none, candidate, verified, unknown
+- estimated_age_class nullable
+- centroid_lat
+- centroid_lon
+- point_geojson
+- crown_geojson nullable
+- crown_area_m2 nullable
+- crown_diameter_m nullable
+- current_health_index nullable
+- current_alert_status: none, low, medium, high, urgent, unknown
+- verification_status: satellite_detected, field_verified, needs_field_check, rejected, uncertain
+- field_tag nullable
+- notes
+- created_at
+- updated_at
+
+tree_satellite_observations
+- id
+- tree_id
+- imagery_acquisition_id
+- observation_date
+- crown_area_m2 nullable
+- crown_diameter_m nullable
+- pan_ndvi_mean nullable
+- pan_ndvi_median nullable
+- pan_ndvi_p10 nullable
+- pan_gndvi_mean nullable
+- pan_savi_mean nullable
+- analytic_ndvi_mean nullable
+- analytic_gndvi_mean nullable
+- analytic_savi_mean nullable
+- final_ndvi_mean nullable
+- health_index nullable
+- canopy_density_score nullable
+- fragmentation_score nullable
+- shadow_fraction nullable
+- anomaly_flag boolean
+- recommended_action
+- raw_metrics_json
+- created_at
+
+satellite_alerts
+- id
+- alert_code
+- alert_type: low_vigor_tree, possible_missing_tree, merged_crown_review, terrace_risk, understory_loss, low_confidence_detection, grove_low_vigor_cluster, other
+- severity: low, medium, high, urgent
+- grove_id
+- tree_id nullable
+- geometry_geojson nullable
+- related_rule_id nullable
+- evidence
+- recommended_task
+- confidence_score nullable
+- status: open, assigned, inspected, resolved, dismissed
+- created_at
+- resolved_at nullable
+
+heritage_rules
+- id
+- rule_code
+- name
+- traditional_rule
+- heritage_rationale
+- scientific_hypothesis
+- data_needed
+- status: confirmed, monitoring, hypothesis, needs_data
+- climate_risk
+- recommended_action_template
+- created_at
+- updated_at
+
+Seed these heritage rules:
+1. First Rain Rule
+2. Ba’al Rainfed Discipline
+3. Fig Trap Trees
+4. Carob Soil Partners
+5. Wild Understory
+6. Sanasil Stone Terraces
+7. Late Harvest
+8. Souri Single Cultivar
+9. Press Within Hours
+
+tasks
+- id
+- title
+- description
+- task_type: tree_inspection, grove_inspection, terrace_check, pest_check, drought_check, pruning_check, harvest_check, understory_survey, lab_sampling, pressing_logistics, satellite_alert_review, other
+- priority: low, medium, high, urgent
+- status: open, assigned, in_progress, completed, cancelled
+- assigned_to_user_id nullable
+- grove_id nullable
+- tree_id nullable
+- satellite_alert_id nullable
+- heritage_rule_id nullable
+- due_date nullable
+- completed_at nullable
+- created_by_user_id nullable
+- notes
+- created_at
+- updated_at
+
+field_visits
+- id
+- worker_id
+- task_id nullable
+- grove_id
+- tree_id nullable
+- satellite_alert_id nullable
+- visit_date
+- gps_lat nullable
+- gps_lon nullable
+- diagnosis
+- severity: none, low, medium, high, urgent, unknown
+- tree_health_score_field nullable
+- canopy_condition nullable
+- fruit_set_score nullable
+- drought_stress_signs nullable
+- pest_signs nullable
+- pesticide_or_treatment_needed boolean nullable
+- root_exposure nullable
+- trunk_condition nullable
+- terrace_condition nullable
+- understory_notes nullable
+- pruning_needed boolean nullable
+- action_taken nullable
+- follow_up_needed boolean
+- notes
+- created_at
+
+harvest_seasons
+- id
+- year
+- name
+- start_date
+- end_date nullable
+- status: planned, active, completed
+- notes
+- created_at
+- updated_at
+
+harvest_events
+One record per harvested tree.
+- id
+- harvest_season_id
+- grove_id
+- tree_id
+- harvest_date
+- status: not_started, in_progress, harvested, batched, pressed
+- started_by_worker_id
+- started_at
+- completed_by_worker_id nullable
+- completed_at nullable
+- pre_harvest_tree_photo_url nullable
+- fruit_condition_notes nullable
+- fruit_maturity_score nullable
+- pest_damage_seen boolean nullable
+- pest_damage_notes nullable
+- worker_count nullable
+- total_boxes nullable
+- total_estimated_weight_kg nullable
+- total_measured_weight_kg nullable
+- notes
+- created_at
+- updated_at
+
+harvest_event_workers
+- id
+- harvest_event_id
+- worker_id
+- role: picker, recorder, supervisor, other
+
+harvest_boxes
+One record per olive box collected from one tree.
+- id
+- harvest_event_id
+- box_code
+- box_sequence_number
+- photo_url
+- estimated_weight_kg nullable
+- measured_weight_kg nullable
+- fruit_quality_score nullable
+- notes
+- created_at
+
+harvest_batches
+A batch groups harvested trees/boxes that go together to the press.
+- id
+- harvest_season_id
+- batch_code
+- grove_id nullable
+- batch_date
+- status: open, sent_to_press, pressed, lab_sampled, completed
+- total_boxes nullable
+- total_estimated_weight_kg nullable
+- total_measured_weight_kg nullable
+- notes
+- created_at
+- updated_at
+
+harvest_batch_items
+Links harvested trees/boxes to a batch.
+- id
+- harvest_batch_id
+- harvest_event_id
+- harvest_box_id nullable
+
+pressing_runs
+- id
+- harvest_batch_id
+- mill_name
+- pressing_started_at
+- pressing_completed_at nullable
+- pressing_delay_hours nullable
+- input_olive_kg nullable
+- output_oil_liters nullable
+- oil_yield_percent nullable
+- temperature_c nullable
+- notes
+- created_at
+- updated_at
+
+oil_batches
+- id
+- pressing_run_id
+- oil_batch_code
+- volume_liters nullable
+- storage_container nullable
+- status: stored, bottled, sold, lab_sampled
+- notes
+- created_at
+- updated_at
+
+lab_results
+- id
+- harvest_season_id nullable
+- harvest_batch_id nullable
+- pressing_run_id nullable
+- oil_batch_id nullable
+- grove_id nullable
+- tree_id nullable
+- batch_name nullable
+- harvest_date nullable
+- pressing_delay_hours nullable
+- olive_kg nullable
+- oil_liters nullable
+- acidity nullable
+- peroxide_value nullable
+- total_polyphenols_mg_kg nullable
+- oleocanthal nullable
+- oleacein nullable
+- lab_name nullable
+- report_file_url nullable
+- notes
+- created_at
+- updated_at
+
+media
+General media table for photos/files.
+- id
+- entity_type: field_visit, harvest_event, harvest_box, tree, task, lab_result, satellite_alert, grove
+- entity_id
+- file_url
+- caption nullable
+- uploaded_by_user_id nullable
+- uploaded_at
+
+rule_evidence
+- id
+- heritage_rule_id
+- grove_id nullable
+- tree_id nullable
+- satellite_observation_id nullable
+- field_visit_id nullable
+- harvest_event_id nullable
+- harvest_batch_id nullable
+- lab_result_id nullable
+- metric_name
+- metric_value
+- interpretation
+- confidence_level: low, medium, high, unknown
+- created_at
+
+audit_events
+- id
+- user_id nullable
+- entity_type
+- entity_id
+- action
+- before_json nullable
+- after_json nullable
+- created_at
+
+Manager Dashboard:
+/manager
+
+Manager design:
+- premium agricultural intelligence feel
+- earthy, elegant, modern
+- serious, not generic SaaS
+- desktop-first but responsive
+- maps, cards, tables, timelines, badges
+- use careful language around satellite-derived signals
+
+Manager pages:
+
+1. Overview Dashboard
+Cards:
+- total groves
+- total active trees
+- verified ancient trees
+- open satellite alerts
+- urgent field tasks
+- average tree health
+- Ba’al resilience signal
+- First Rain Index placeholder
+- Terrace Risk
+- Understory Coverage placeholder
+- active harvest season status
+- harvested trees today
+- boxes collected today
+- open harvest batches
+- pressing/lab results pending
+
+2. Grove Map
+- Leaflet map
+- show grove polygons
+- show tree centroids colored by health/alert/harvest status
+- show satellite alerts
+- filters:
+  grove
+  tree_type
+  ancient_status
+  health range
+  alert severity
+  verification status
+  harvest status
+- clicking a tree opens a side panel:
+  tree details
+  latest satellite metrics
+  open alerts
+  open tasks
+  field visit history
+  harvest history
+  lab/batch links if available
+
+3. Tree Registry
+- searchable table
+- filters by grove, health, ancient status, tree type, verification status
+- tree detail page
+- timeline of satellite observations, field visits, tasks, harvest events, and lab links
+- allow manager to update notes, ancient status, verification status, and field tag
+
+4. Satellite Alerts
+- list and map of alerts
+- create task from alert
+- assign worker
+- dismiss/resolve alert with reason
+- show related heritage rule if linked
+
+5. Tasks
+- manager can create, assign, edit, and close tasks
+- task board grouped by status and priority
+- filters by worker, grove, tree, task type, due date
+
+6. Heritage Rules
+Cards for each inherited rule:
+- First Rain Rule
+- Ba’al Rainfed Discipline
+- Fig Trap Trees
+- Carob Soil Partners
+- Wild Understory
+- Sanasil Stone Terraces
+- Late Harvest
+- Souri Single Cultivar
+- Press Within Hours
+
+Each card should show:
+- traditional rule
+- heritage rationale
+- scientific hypothesis
+- current data being tracked
+- climate risk
+- linked satellite evidence
+- linked field visits
+- linked harvest/lab evidence
+- status: confirmed, monitoring, hypothesis, needs_data
+- manager notes
+
+7. Field Visits Review
+- review submitted worker observations/photos
+- approve or request follow-up
+- convert field visit into updated tree health/verification status
+- close related task or alert after review
+
+8. Harvest Overview
+Route: /manager/harvest
+Show:
+- active harvest season
+- harvested trees count
+- harvested groves
+- boxes collected
+- estimated/measured olive kg
+- oil liters produced
+- oil yield percent
+- average pressing delay
+- open batches
+- lab results pending
+- harvest progress by grove
+
+9. Harvest Map
+- show trees colored by harvest status:
+  not_started, in_progress, harvested, batched, pressed
+- click tree to see:
+  pre-harvest photo
+  harvest event
+  workers involved
+  box photos
+  batch
+  pressing run
+  oil batch
+  lab result if connected
+
+10. Harvest Events Table
+- tree-level harvest records
+- filters by grove, date, worker, status
+- view pre-harvest photo and box photos
+- show estimated/measured yield per tree where available
+
+11. Batch Management
+- create/edit harvest batches
+- add harvested trees or individual boxes into batch
+- show total boxes and total estimated/measured kg
+- mark batch sent_to_press
+- connect batch to pressing run
+
+12. Pressing, Oil & Lab Traceability
+- create pressing run from harvest batch
+- record input olive kg, output oil liters, oil yield percent, pressing delay
+- create oil batch
+- connect lab results to oil batch / pressing run / harvest batch
+- show polyphenols, acidity, peroxide value, oleocanthal, oleacein
+- show which groves/trees contributed to the oil batch
+
+13. Tree Yield Analytics
+- per-tree box count
+- per-tree estimated/measured kg if available
+- per-grove yield
+- harvest date by tree
+- oil yield by batch
+- lab quality by batch
+- use careful language if weights are estimated from box count/photos
+
+14. Import Center
+- upload/import baseline files
+- show import preview
+- run import
+- show import summary
+- prevent duplicate imports by source image ID
+- show correction_summary.csv if available
+
+Field Worker App:
+/field
+
+Field app design:
+- mobile-first
+- large buttons
+- simple task flow
+- minimal typing
+- camera/photo upload must be prominent
+- usable outdoors
+- clear priority and location
+- timestamp every important action
+- record worker ID for every important action
+- preserve form state when possible
+- avoid losing data if connectivity is poor
+- allow retry upload if feasible
+
+At the top of /field, show a clear mode selector:
+1. Monitoring Mode
+2. Harvest Mode
+
+Monitoring Mode:
+Used throughout the year for general grove and tree monitoring.
+
+Monitoring pages:
+
+1. My Monitoring Tasks
+- assigned inspections and tasks
+- pruning checks
+- drought stress checks
+- pest checks
+- pesticide/treatment checks
+- terrace checks
+- understory surveys
+- satellite alert review
+- general tree/grove health checks
+- priority badges
+- due date
+- grove name
+- tree code if relevant
+
+2. Monitoring Task Detail
+- map location
+- related tree/grove/satellite alert
+- related heritage rule
+- satellite evidence
+- checklist based on task type
+- button: start inspection
+- button: upload photo
+- button: mark complete
+
+3. Tree/Grove Inspection Form
+Fields:
+- tree found? yes/no/uncertain
+- tree type: olive, fig, carob, other, unknown
+- field health score 0-100
+- canopy condition
+- fruit set score
+- drought stress signs
+- pest signs
+- pesticide/treatment needed? yes/no/uncertain
+- root exposure
+- trunk condition
+- terrace condition nearby
+- understory notes
+- pruning needed? yes/no
+- action taken
+- follow-up needed
+- notes
+- upload photos
+
+4. Monitoring Grove Map
+- simple map focused on assigned grove/tasks
+- show assigned trees and alerts
+- no complex analytics
+- clicking a task opens task detail
+
+Harvest Mode:
+Used during harvest season.
+
+Goal:
+Tree-to-oil traceability:
+tree -> harvest event -> boxes -> harvest batch -> pressing run -> oil batch -> lab result
+
+Harvest Mode daily workflow:
+1. Worker selects a tree.
+2. Worker starts a tree harvest record.
+3. Worker takes/uploads an initial photo of the tree before harvesting.
+4. 3-4 workers harvest the tree.
+5. When harvesting is done, worker photographs all boxes containing olives collected from that tree.
+6. System records box count, optional estimated/full weight, workers involved, start/end time, and notes.
+7. Later these tree harvest records are grouped into harvest batches.
+8. Batches are connected to pressing records, oil output, and lab results.
+
+Harvest pages:
+
+1. Harvest Home
+- active harvest season
+- today’s assigned grove
+- trees harvested today
+- trees in progress
+- boxes recorded today
+- estimated kg today
+- measured kg today if available
+- open harvest batches
+- quick button: Start Tree Harvest
+
+2. Select Tree to Harvest
+- map and searchable list
+- filter by grove
+- show tree_code, grove, current harvest status
+- prevent duplicate active harvest event for same tree unless manager/supervisor override
+
+3. Start Tree Harvest
+Workflow:
+- select tree
+- confirm tree identity
+- take/upload initial photo of tree before harvesting
+- select workers involved, usually 3-4 workers
+- record start time automatically
+- optional notes:
+  fruit maturity
+  pest damage
+  fruit condition
+  tree condition
+- create harvest_event with status in_progress
+
+4. Complete Tree Harvest
+Workflow:
+- open active harvest event
+- add boxes one by one
+- for each box:
+  - auto-generate box_code
+  - set box sequence number
+  - take/upload photo of the box
+  - optional estimated weight kg
+  - optional measured weight kg
+  - optional fruit quality score
+  - notes
+- when all boxes are added, mark tree harvest as harvested
+- record completed_at
+- calculate total boxes and estimated/measured kg
+- update tree harvest status
+
+5. Batch Builder
+For manager or authorized field supervisor:
+- create harvest batch for the day
+- add harvested tree events or individual boxes into batch
+- show total boxes and total estimated/measured kg
+- mark batch sent_to_press
+
+6. Pressing Record
+For manager or supervisor:
+- select harvest batch
+- record mill name
+- pressing started/completed time
+- input olive kg
+- output oil liters
+- oil yield percent
+- pressing delay hours
+- notes
+- create oil batch
+
+7. Harvest Traceability View
+For a selected tree, show:
+- pre-harvest photo
+- harvest date/time
+- workers involved
+- all box photos
+- box count and weights
+- harvest batch
+- pressing run
+- oil batch
+- lab result if connected
+
+Important harvest data rules:
+- Photos are evidence, not automatic truth.
+- If weight is not measured, store estimated_weight_kg and mark it as estimated.
+- Do not infer exact oil yield per tree unless the batch composition and weights support it.
+- If multiple trees are mixed in one batch, lab results apply to the batch, not directly to each tree unless explicitly sampled that way.
+- Preserve chain of custody from tree to box to batch to press to oil to lab.
+- Never overwrite harvest history.
+- Warn before completing a tree harvest without box photos.
+- Warn before sending a batch to press without confirming box/tree contents.
+
+Heritage rule links:
+Monitoring Mode should connect field tasks to:
+- Ba’al Rainfed Discipline: drought/water stress
+- Fig Trap Trees: pest monitoring
+- Carob Soil Partners: nearby carob effects
+- Wild Understory: biodiversity/cover
+- Sanasil Stone Terraces: erosion/terrace risk
+- Pruning and general tree health
+
+Harvest Mode should connect to:
+- First Rain Rule: harvest timing
+- Late Harvest: date, altitude, maturity, pest window
+- Press Within Hours: pressing delay
+- Ba’al Rainfed Discipline: quality/yield relationship
+- Souri Single Cultivar: variety/batch identity
+
+AI Grove Interpreter:
+Add a manager-only page: /manager/ai
+
+The AI should not invent facts.
+It should summarize existing database records and answer questions like:
+- Which grove needs attention first?
+- Which ancient trees have open alerts?
+- Which satellite alerts have not been inspected?
+- What evidence do we have for the Ba’al rule?
+- Which harvest batches have pending lab results?
+- Which trees contributed to this oil batch?
+- Which harvested trees had pest damage notes?
+- Generate this week’s field monitoring plan.
+- Generate today’s harvest plan.
+
+If no external AI key is configured, implement a rule-based summary generator and leave clear placeholders for future LLM integration.
+
+Single source of truth rules:
+- All frontend reads/writes go through backend API.
+- No frontend stores authoritative data locally.
+- Historical satellite observations, field visits, harvest events, boxes, batches, pressing runs, oil batches, and lab results must never be overwritten.
+- Tree current status may be updated, but historical records remain immutable.
+- Preserve audit_events for important edits.
+- Use optimistic UI only when safe.
+- Every photo/file upload should create a media record.
+- Every major state transition should be timestamped.
+
+Careful language:
+Do not describe satellite signals as confirmed disease, pest, yield, age, or exact diagnosis.
+Use language like:
+- “satellite stress signal”
+- “needs field inspection”
+- “low-vigor anomaly”
+- “field verification required”
+- “heritage rule evidence”
+- “estimated weight”
+- “batch-level lab result”
+
+Seed data:
+If import files are not present yet, create realistic sample data for:
+- 8 groves
+- sample olive/fig/carob trees
+- sample satellite observations
+- sample alerts
+- sample monitoring tasks
+- sample harvest season
+- sample harvest events and boxes
+- sample pressing run
+- sample lab result with high-polyphenol Souri olive oil
+But design the app around real import files.
+
+Deliverables:
+- working Replit app
+- PostgreSQL schema
+- import workflow/scripts
+- backend API routes
+- Manager Dashboard at /manager
+- Field Worker App at /field
+- Monitoring Mode
+- Harvest Mode
+- Leaflet map views
+- tree registry
+- satellite alerts
+- task workflow
+- field visit workflow
+- harvest tree-to-oil traceability workflow
+- heritage rules engine
+- lab results and oil batch linkage
+- README with:
+  - how to run the app
+  - how to import baseline files
+  - how future imagery imports should work
+  - how field workers use Monitoring Mode
+  - how field workers use Harvest Mode
+  - how harvest data connects to pressing and lab results
+
+Build priority:
+1. Database schema and seed data.
+2. Import workflow.
+3. Manager overview, tree registry, map, alerts, and tasks.
+4. Field Worker Monitoring Mode.
+5. Field Worker Harvest Mode.
+6. Harvest batch / pressing / oil / lab traceability.
+7. Heritage Rules evidence views.
+8. AI Grove Interpreter or rule-based summary generator.
+
+The product goal:
+Khalaf Olive Groves should become the shared source of truth for ancient olive tree stewardship.
+
+It should support three evidence loops:
+1. Satellite monitoring loop:
+satellite signal -> tree record -> alert -> field task -> worker validation -> updated tree history
+
+2. Field monitoring loop:
+seasonal task -> worker inspection -> photo/diagnosis -> manager review -> follow-up action
+
+3. Harvest traceability loop:
+tree -> pre-harvest photo -> boxes -> batch -> pressing run -> oil batch -> lab result
+
+This is not a generic farm management app.
+It is ancient-tree stewardship software for reverse-engineering inherited olive grove wisdom with modern data.

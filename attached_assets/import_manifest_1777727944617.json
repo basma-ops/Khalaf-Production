@@ -1,0 +1,39 @@
+{
+  "generated_at_utc": "2026-05-02T13:03:05.661063Z",
+  "source_baseline": "/Users/basmakhalaf/ReplitPrep/outputs/khalaf_baseline_20260502",
+  "config_used": {
+    "ndvi_veg_threshold": 0.25,
+    "low_vigor_health_below": 45.0,
+    "low_vigor_ndvi_p10_below": 0.25,
+    "missing_dead_ndvi_below": 0.18,
+    "low_confidence_below": 0.5,
+    "verification_status": "needs_field_verification",
+    "detection_method": "ndvi_watershed_v1+manual_review"
+  },
+  "counts": {
+    "auto_detections": 1272,
+    "manual_added": 103,
+    "rejected": 49,
+    "kept_corrected_trees": 1326,
+    "alerts": 1234,
+    "verified_olive": 0,
+    "verified_fig_carob_other": 0,
+    "unresolved": 1326,
+    "review_coverage_pct": 10.7
+  },
+  "files": {
+    "groves_geojson": "groves.geojson",
+    "corrected_trees_geojson": "corrected_trees.geojson",
+    "corrected_tree_satellite_observations_csv": "corrected_tree_satellite_observations.csv",
+    "corrected_satellite_alerts_geojson": "corrected_satellite_alerts.geojson",
+    "correction_summary_csv": "correction_summary.csv",
+    "correction_events_jsonl": "correction_events.jsonl"
+  },
+  "import_order": [
+    "groves.geojson",
+    "corrected_trees.geojson",
+    "corrected_tree_satellite_observations.csv",
+    "corrected_satellite_alerts.geojson"
+  ],
+  "verification_note": "Manual review applied on top of auto detections. verification_status reflects the reviewed status; trees with status=verified were confirmed by a human reviewer. No disease, pest, age, or yield is claimed from imagery alone."
+}

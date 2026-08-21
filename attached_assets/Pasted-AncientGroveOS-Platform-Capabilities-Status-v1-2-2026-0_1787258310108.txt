@@ -1,0 +1,150 @@
+AncientGroveOS — Platform Capabilities
+Status: v1.2 (2026-08-13) — the product view of what the platform can do today, what is built but gated, and what is designed. Relation to other docs: SPEC.md is the original product intent; ARCHITECTURE.md is how it's built; this document is the capability contract — what the platform promises, under what honesty rules, and what evidence gates each promise.
+1. What this platform is
+
+A single-estate operating system for heritage olive groves — the Khalaf family estate in Rameh, Galilee: 8 groves, 1,326 registered trees (reconciliation with the 1,149 planning figure pending), Souri cultivar tradition, rain-fed (Ba'al) practice. It is deliberately not a multi-farm SaaS: one estate, one manager, deep records, generational memory.
+
+The product thesis in one line: trees are individuals with biographies, and trust in the record is the feature. Every capability below is designed to make the record richer without ever letting a derived number masquerade as a measurement.
+
+Who it serves
+
+Actor	Phase	What they get
+Manager (owner)	now	The command center: registry, map, photos, climate, rules — plus the labeling and review tools that train the intelligence layer
+Operations Manager	Phase 1	Field work queue, guided capture, incident reporting (designed in AGRONOMY_OPERATIONS.md)
+Seasonal harvest crew	Phase 2	Harvest logging feeding the bottle→tree chain
+Future generations	always	The estate's memory: what was done, what was seen, what the land taught
+Maturity legend
+
+✅ Shipped — in daily use on the estate
+🔒 Gated — infrastructure built; the capability ships only when its evidence gates pass
+📐 Designed — full spec exists; not yet built
+🚫 Non-goal — deliberately out of scope
+2. Capability: Tree registry & identity ✅
+
+Every tree is a durable individual: a stable public code (KOG-MORAN-0142), a surveyed location, crown geometry, variety, age estimate, ancient-tree flag, verification status, and a complete change history.
+
+Identity survives everything. Codes (not database ids) are the public identity — proven durable across a full database rebuild. QR/NFC tagging and offline field references (Phase 1) build on the same codes.
+Verification is a first-class workflow. Every tree carries unverified → field_verified status; the registry filters by it; one-click verify writes an audit row. Current state: 1 of 1,326 field-verified — the field-walk campaign is the largest open data task, and it runs on QField: the phone-ready package (campaign.gpkg + campaign.qgz, built headlessly by pnpm qfield:package and machine-verified) is ready to copy to the phone; results return through an audited import (ALTERNATIVES_REUSE §3.2).
+Every change is remembered. All mutations append to an audit log (actor, before/after); the tree detail page renders this as the tree's activity timeline. Nothing is silently editable.
+Registry browsing at estate scale: filter by grove, health bucket, verification, ancient status, anomaly, photo presence, free text; four sort orders; windowed pagination.
+Honesty posture: ages are estimates and labeled so; variety is Souri_or_unknown until evidenced (see §8 — a pit-photo protocol can upgrade this claim).
+
+3. Capability: Geospatial command center ✅
+
+One map of the whole estate that answers "where should I look today?"
+
+All 1,326 trees rendered with health-bucket coloring, ancient-tree rings, anomaly outlines; tree-code labels at close zoom; grove boundaries; high-resolution grove imagery overlays (source/display/analysis resolution kept distinct — resampled imagery cannot masquerade as precision).
+Click any tree → detail drawer with satellite signal, photos, and management actions; click a grove → focus and filter.
+Filters compose: grove × health × ancient × anomaly.
+Provider-independent: free OpenStreetMap/Esri by default, Google imagery when a key is present — pages don't know which is active.
+Grove boundary drawing/editing for new parcels.
+Reserved layers, wired but empty: alerts and harvest status — they light up when the operations layer (§10) produces data.
+
+4. Capability: Photo capture & tree matching ✅
+
+Photograph a tree in the field; the platform files it into that tree's biography.
+
+Bulk drag-drop upload (JPEG/PNG/HEIC) with EXIF extraction, thumbnails, and per-file results.
+GPS auto-matching, tuned for precision over convenience. A photo auto-links only when exactly one tree is within 3 m and the next candidate is ≥4 m farther; anything ambiguous goes to a review queue with ranked candidates. The cost asymmetry is explicit: a wrong link corrupts a biography silently; a review click costs five seconds.
+Review queue for ambiguous matches: confirm a candidate, type a code manually, or reject. Every confirmation is simultaneously a training label for the future visual matcher.
+Identity at capture (the leading-product pattern): a tree code entered at upload links every photo in the batch directly — confirmed, audited, GPS matching skipped; disagreement between the code and the fix is recorded as evidence, never a blocker. QField staged captures feed this path naturally.
+Guided field walk (/field/walk) — the phone-first way to produce identity-at-capture photos: pick a grove, follow a computed tree-to-tree route (greedy nearest-neighbor tour, ≈1.5–4.2 km per grove), and photograph only the currently selected tree. Every shot posts with that tree's code, so it lands confirmed + audited without touching GPS matching. Includes live distance/compass to the next tree (when the browser grants location), a tap-to-jump route minimap, one-tap field-verification, and progress that survives reloads. Caveat: using it from a phone requires exposing the app beyond localhost — the no-auth gap (§11 known gaps) must be closed or explicitly risk-accepted first.
+Purpose tags at upload (general, growth, pest, disease, pre_harvest, pruning_before/after, …) — field captures self-sort into the golden datasets that train §8.
+Photos outlive the database. Files on disk carry their identity (media id = filename); the entire photo corpus was once rebuilt from disk after a database loss with zero broken links.
+Trust infrastructure behind this capability: the match rule's decision table is unit-pinned; 22 boundary scenarios plus the full 170-photo live corpus are frozen as drift baselines — any change to a match decision fails CI until explicitly reviewed. Current corpus: 245 photos (44 auto-matched, 120 awaiting review, 81 without usable GPS).
+
+Measured-accuracy gate (pending owner time): wrong-link rate ≤ 0.5% and candidate recall ≥ 98%, computed against human-confirmed ground truth (the review-queue pass + a staged field walk). Until then the thresholds are drift-protected hypotheses, and the product treats them that way.
+
+5. Capability: Climate intelligence ✅
+
+Forty-five seasons (1981–2026) of daily weather history for the estate, turned into the metrics olive growing actually runs on.
+
+First-rain analytics under four thresholds plus the estate's "significant rain" rule (daily ≥5 mm or ≥10 mm/72h after a dry fortnight) — the metric the Ba'al rainfed tradition turns on. 45-year timeline with "days early/late vs average."
+Season summaries per grove: winter/water-year rain sums, spring/summer windows, heat days (≥30/≥35 °C), frost days, longest dry spell, heavy-rain event counts, pre-harvest windows (correctly anchored to real Oct–Nov harvest dates).
+Typed rain events (first rain, heavy rain, 3-day storms, dry spells) — the terrace-risk signal for the sanasil.
+Heritage-rule evidence, automatically. Every season summary links to the rules it bears on (Ba'al rainfed discipline, first-rain timing, terrace maintenance, late harvest) — 1,072 evidence rows and counting.
+All thresholds live in one config file; editing it re-derives every summary from stored data without re-fetching.
+Honesty posture (load-bearing): this is a regional / grove-centroid estimate from ~11 km reanalysis grid cells. The whole estate sits in one cell, so inter-grove climate differences are not claimable and the UI says so. Field sensors (Phase 3) refine this; until then the vocabulary holds.
+
+6. Capability: Heritage rules & evidence ✅
+
+The generational-memory layer — the reason this platform exists rather than a spreadsheet.
+
+Nine inherited practices captured as structured rules (status: confirmed / monitoring / hypothesis / needs_data), from Ba'al rainfed discipline to terrace (sanasil) maintenance to late-harvest timing.
+Rules accumulate evidence, not opinions. Every subsystem that produces relevant data links it: supports / contradicts / context. Climate is the first automated evidence producer; operations, harvest, and lab results follow the same pattern.
+The long-term product promise: each rule becomes a living dossier — "grandfather said late harvest; forty-five seasons of data say…" — with the evidence trail to defend or revise the practice.
+7. Capability: Satellite health signals ✅ (single-date) → 📐 time-series flagship
+
+Today: one baseline acquisition; per-tree NDVI/GNDVI/SAVI, crown area, a 0–100 health index, and anomaly flags — 1,234 trees carry an open signal. Rendered on the map and each tree's card.
+The honesty rule that governs it: a satellite value is a signal for field verification, never a diagnosis. The UI's verb is "walk and confirm."
+Designed next — two honest tiers (ALTERNATIVES_REUSE §3.3):
+Free grove tier — ✅ live (2026-08-12): 587 monthly Sentinel-2 NDVI intervals (2019 → 2026) across all 8 groves, computed server-side by Copernicus, refreshed any time with pnpm ndvi:fetch (idempotent). The climate page shows each grove's latest NDVI against its own same-month multi-year norm. Grove-level only by honesty rule: at 10 m/pixel an olive crown is sub-pixel, so per-tree claims from this tier are forbidden the same way inter-grove climate claims are.
+Per-tree flagship (VHR): multi-acquisition ingest → per-tree baselines → change over time — a declining tree flagged because it declined, not because it differs from neighbors; cluster-spread analysis for early disease warning. Externally benchmarkable against the OQDS-Insight dataset (76k olive trees with real decline labels) before the estate has its own.
+8. Capability: Visual tree intelligence 🔒 (five capabilities, eval-gated)
+
+The platform's AI layer: one field photo → structured observations on a tree's card. All five capabilities are schema-complete, prompt-complete, and harness-complete — none ships until its gates pass on Khalaf photos. The model may only report what is visible; abstention is always a valid answer; every finding must cite visible evidence.
+
+Capability	Output (always with confidence + evidence)	Hard gates before UI	Structural honesty rule
+Yield (fruit load)	ordinal none/light/medium/heavy or not_assessable	adjacent-class ≥ 90%, exact ≥ 60%, abstention recall ≥ 90%	No kilograms, ever — a kg estimate is a schema parse failure; calibration to weight arrives only when real harvest weights exist (Phase 2 correlation study pre-registered)
+Flowering stage	BBCH-aligned dormant → ripening or not_visible	macro-F1 ≥ 0.70 (stages with n≥20); monotonicity violations ≤ 5%; calendar-plausibility violations ≤ 2%	Predictions are checked against physics (stages can't regress within a season) and the Galilee calendar — automatically, on every eval
+Pruning needs	yes/no/uncertain + rubric reasons	agreement ≥ min(75%, owner self-consistency − 5 pts); reasons overlap ≥ 0.5	Judged only against the owner-authored rubric; a "yes" without a rubric reason cannot parse
+Pest & disease	ranked findings from a closed list of 5 olive conditions, or none_observed / uncertain_refer	per-class precision ≥ 0.80 on n≥15 Khalaf positives; healthy false-alarm ≤ 5%; adversarial (carob/fig/soil) findings = 0	A routing signal, never a diagnosis — off-list guesses cannot parse; UI copy is snapshot-tested to never say "diagnosed/confirmed/infected" un-hedged
+Visible stress	none/mild/severe/not_assessable + indicators	severe recall ≥ 0.80; healthy-photo overclaim ≤ 2%	No watering advice from the model, structurally — advice exists only in the fusion layer below
+How a capability earns its way into the UI: owner labels photos (pnpm label, ~200/hr) → one budgeted model run fills a committed response cache → scoring is free and deterministic forever after → gates render pass/fail/insufficient with no fudging. Model and prompt are version-pinned; changing either is treated like a code change (full re-run, diffed report). External datasets (Roboflow disease sets, OliVaR) aid prompt development and benchmarking — ship gates are computed exclusively on Khalaf photos.
+
+Nearest to shipping: flowering (169 May-2026 photos are a ready seed set — one labeling hour from a first real eval).
+
+9. Capability: Watering advice — the fusion layer 🔒 (engine built, UI pending)
+
+On a rain-fed estate, "does it need water?" is partly a policy question. The platform's answer is engineered so that irrigation advice can never come from a photo alone:
+
+The advice engine fuses visible stress (photo) with the climate record (current dry-spell length, recent significant rain) — its complete 20-row decision table is pinned by tests, with invariants proven over the whole input space:
+No visible stress, or an unjudgeable photo → no watering advice, whatever the climate says.
+Exactly one combination in the entire table can suggest considering intervention: severe visible stress and a long dry spell and no recent rain — and it is phrased as a Ba'al heritage-rule exception requiring the owner's decision, never an instruction.
+Severe stress right after rain → routed to pest/disease inspection ("unlikely water-related").
+Missing climate data caps escalation at "inspect."
+Ships to the UI together with the visible-stress capability (§8) once its gates pass.
+10. Capability: Agronomy operations 📐 (designed, PR-sequenced)
+
+The 2026 operating layer — fully designed in AGRONOMY_OPERATIONS.md, staged as eight PRs:
+
+management zones · versioned agronomy protocols (with legal-status hard stops for chemical guidance) · the activities work-queue/notebook · field observations with typed payloads · incident lifecycle with confirmation levels (model_suggested → field_observed → agronomist_confirmed → lab_confirmed) · olive-fly trap network with per-trap-day analytics · leaf/fruit sampling with chain of custody · treatment compliance (registration, tree-age, pre-harvest-interval hard stops) · mechanical-harvest readiness (detachment index) with per-tree shaker eligibility separate from heritage-tree protection.
+
+Governing distinctions carried over from the platform's convictions: a recommendation is not a diagnosis; the activities notebook is not the audit log; heritage rules are not agronomy protocols. Preflight complete (commit ✅ index fix ✅ backup ✅ tag ✅); remaining before PR 1: authentication, tree-count reconciliation.
+
+11. Capability: Trust & data-safety infrastructure ✅
+
+Usually invisible in product specs; here it is product — the estate's records are only as valuable as they are trustworthy.
+
+Honesty contract, executable. The vocabulary rules (signal-not-diagnosis, estimate-not-measurement, no-kg, no-irrigation-from-pixels) are enforced by schema validation and pinned tests, not by copy discipline alone.
+Decision drift is a reviewed event. Photo-match behavior is frozen in committed baselines (synthetic boundary lattice + full live corpus); any change fails CI until a human regenerates the baseline in the same change.
+177 automated tests on every push: 145 unit (free, deterministic — no DB/network/model) + 32 integration against real PostGIS in CI. The suites have caught two real climate-math defects, a fake-unique index, and an NDVI interval-grid bug.
+pnpm db:doctor — seven read-only production invariants runnable against the live estate any time (first run: 7/7 PASS); the checker is itself tested against seeded violations.
+Every mutation is audited (actor, before/after, append-only) and surfaced as per-tree timelines.
+Daily verified backups: TOC-checked database dumps (30 local + 7 off-machine via iCloud), an uploads mirror where deletions are quarantined for 90 days, and a restore drill that has actually been run (1,326 trees / 245 photos / 132,944 weather rows recovered to a scratch database). Restore runbooks in BACKUP.md.
+Code and docs on private GitHub (basma-ops/AncientGroveOS) from the phase-0-baseline tag forward.
+Known gaps, stated plainly: photos have no off-machine copy yet (pending iCloud quota confirmation); there is no authentication (localhost-only until the operations layer forces it); matching accuracy is drift-protected but not yet ground-truth-measured.
+
+12. Non-goals 🚫
+
+Deliberate scope walls, restated from SPEC and AGRONOMY_OPERATIONS §13 — the platform stays sharp by refusing these:
+
+Multi-farm tenancy, subscriptions, feature gating, or any generic agtech-marketplace abstraction
+Kilogram yield estimates from photos; disease diagnosis from any model; autonomous chemical selection
+Irrigation scheduling as a product feature (Ba'al estate — see §9 for the only sanctioned exception path)
+Tractor telemetry, ISOBUS/VRA prescriptions, fleet integrations
+Public consumer/tourism features; live-updating dashboards (the estate changes daily, not by the second)
+Cloud dependence in the request path — the system must run whole on one machine in the village
+13. Capability roadmap at a glance
+
+Horizon	Capability	Unblocks it
+One owner-hour away	Flowering eval live (§8)	Labeling pass on the 169 May photos
+One owner-hour away	Matching accuracy measured (§4)	QField walk — the phone package is built and verified
+One owner-hour away	Flowering eval live (§8)	Labeling pass (pnpm label) + API key
+✅ done 2026-08	QField campaign bridge · grove NDVI tier · integration/CI tiers · Data Doctor	—
+Next build tranche	E2E smokes + remaining route/script tests	—
+Preflight → PR 1	Agronomy operations kernel (§10)	Auth + tree-count reconciliation
+Capture-campaign-dependent	Yield & stress evals (§8)	Sep–Oct pre-harvest + dry-season photos
+Data-arrival-dependent	Satellite time series (§7)	Next imagery acquisition + ingest build
+Phase 2	Harvest chain → bottle-to-tree traceability	Harvest season + crew app
+Phase 3	Soil/weather sensors refining climate honesty	Hard

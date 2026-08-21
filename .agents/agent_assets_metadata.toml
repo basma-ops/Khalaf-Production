@@ -1,0 +1,38 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "hJMj1Wu9S7RzOZy5_fFgS"
+uri = "file://exports/khalaf-olive-groves.html.tar.gz"
+type = "unspecified"
+title = "Khalaf Olive Groves — single-file HTML (gzipped)"
+
+[[outputs]]
+id = "e5t7qJtghHpsqMH-WB94Z"
+uri = "file://.local/exports/hud/tree-51/photo-306.jpg"
+type = "image"
+title = "HUD overlay — KOG-MORAN-0058 (W side)"
+
+[[outputs]]
+id = "3sDHZrTwsEniYAgzHSQZr"
+uri = "file://.local/exports/hud/tree-51/photo-307.jpg"
+type = "image"
+title = "HUD overlay — KOG-MORAN-0058 (E side)"
+
+[[outputs]]
+id = "HlYjjRLgd5qDlYF0ld51e"
+uri = "file://.local/exports/hud/tree-23/photo-297.jpg"
+type = "image"
+title = "HUD overlay — KOG-MORAN-0028"
+
+[[outputs]]
+id = "AeCeWAOonCftM65gL-qk7"
+uri = "file://.local/exports/tree-analysis-dataset.json"
+type = "unspecified"
+title = "Full dataset — 50 trees, 253 photos"
+
+[[outputs]]
+id = "BpfjsxryfNAz4wyjpKauu"
+uri = "file://.local/exports/README.md"
+type = "text"
+title = "Pipeline docs"

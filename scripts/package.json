@@ -1,0 +1,27 @@
+{
+  "name": "@workspace/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hello": "tsx ./src/hello.ts",
+    "import-real-data": "tsx ./src/import-real-data.ts",
+    "extract-tree-analysis": "tsx ./src/extract-tree-analysis.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.18.0",
+    "@types/proj4": "^2.19.0",
+    "csv-parse": "^6.2.1",
+    "drizzle-orm": "catalog:",
+    "geotiff": "^3.0.5",
+    "pg": "^8.20.0",
+    "proj4": "^2.20.8",
+    "tsx": "catalog:"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
+    "@workspace/db": "workspace:*"
+  }
+}

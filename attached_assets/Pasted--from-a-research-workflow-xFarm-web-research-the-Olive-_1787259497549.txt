@@ -1,0 +1,119 @@
+ from a research workflow (xFarm web research + the Olive Oil World Congress slides + a read of this repo).
+> Authoritative inputs: the vendor slides and our own schema/routes. Web research is supporting.
+> Date: baseline against 14-table schema, GPS-only VTI, no operations tables.
+
+# xFarm Reuse & Learn — AncientGroveOS
+
+**For:** Khalaf single-estate heritage olive-grove manager (manager + one ops manager + seasonal crew).
+**Not:** a multi-farm SaaS. Every recommendation below is filtered through that constraint.
+**Repo state confirmed:** `lib/db/schema.ts` (single file, 14 tables); routes under `app/` as listed in context.
+
+---
+
+## 1. xFarm free-module inventory
+
+| Module | What it does | Free/Paid | Relevance to a single heritage estate |
+|---|---|---|---|
+| Digital Field Notebook | Logs treatments, fertilization, irrigation, machinery, workers → compliance logbook | **Free (core)** | **High** — this is the record backbone we lack |
+| Farm/Parcel + Crop/Land Registry | Map-anchored blocks, crop assignment, staff/roles | **Free (core)** | **High** — we already have this (groves/trees) |
+| Weather / Agroweather | Current conditions free; multi-day forecast, spray-window & rainfall-trend advice paid | **Freemium** | **High** — we have history; the *actionable* spray-window is the gap |
+| Satellite / NDVI | LITE = latest single NDVI image; PRO = 14 indices + ~1yr history + date comparison | **Freemium** | **High** — we're at LITE-equivalent; time-series is the prize |
+| Warehouse / Inventory | Input stock as movements, auto-decrement from notebook | **Free (core)** | **Low** — over-engineering for one estate; a notes field suffices |
+| Document Export | Field notebook → Excel/PDF; certification reporting paid | **Free (basic)** | **Med** — useful if PDO/organic certification is pursued |
+| Machinery / Telemetry | Registry free; live tractor telemetry paid | **Freemium** | **Low** — no fleet; skip telemetry |
+| Alerts / Notifications | Threshold alerts (frost, drought, pest) | **Paid** | **Med** — cheap to build ourselves off weather we already store |
+| Precision Ag / VRA prescriptions | Variable-rate maps, ISOXML/Shapefile export, yield maps | **Paid** | **Low** — no VRA sprayer; zoning UI reusable only if per-tree rates matter |
+| DSS agronomic models | Weather+sensor+trap → disease/pest risk + treatment timing | **Paid + hardware** | **High** — the olive-fly DSS is the single most defensible feature |
+| Sensors (xSense/xTrap/xCam/xNode) | Weather station, camera traps, soil probes, crop cams | **Paid hardware** | **Med** — the *loop* (trap→count→timing) matters; the hardware can wait |
+| xFarm Agent (WhatsApp) | Voice/text → structured notebook entry; pushes alerts in-chat | **Freemium** | **High** — the low-friction entry path for a non-technical field user |
+| Agronomist advisory | Human agronomic service layer | **Paid** | **Low** — you are the agronomist |
+
+**Free-tier spine:** map-anchored registry → mobile field-notebook logging → compliance export, plus free latest-NDVI-per-block thumbnail. We already have the registry; we're missing the notebook and the time-series.
+
+---
+
+## 2. What we already match
+
+Being specific — where AncientGroveOS is at or above xFarm's free tier today:
+
+- **Parcel/crop/land registry → FULL match, arguably better.** `groves` (boundary, areaHa, slope, orientation, terraces, soilProfile) + `trees` (per-tree code, PostGIS point, crownPolygon, variety, ageEstimate, ancient flag, verificationStatus). xFarm registers *fields*; we register *individual trees*. Routes `/groves`, `/groves/[code]`, `/trees`, `/trees/[code]`, `/manager/map`.
+- **Latest-NDVI-per-block (Satellite LITE equivalent) → matched.** `treeSatelliteObservations` stores NDVI/GNDVI/SAVI + healthIndex + anomalyFlags per tree per acquisition; `imageryAcquisitions` holds source/date/resolution; raster overlays render on `/manager/map`. **Gap vs LITE:** ours is per-tree points, not a rendered index heatmap; and it's single-date (see §3).
+- **Weather (free tier) → matched and exceeded on history.** `groveWeatherDaily`, `groveWeatherSeasonSummary`, `rainEvents` (Open-Meteo ERA5, 45 seasons) with first-rain / dry-spell / heat-day derivations, surfaced at `/manager/climate`. xFarm's *free* weather is just current conditions; we have far deeper history. **Gap:** no forward forecast, no spray-window advice.
+- **Grove memory / "every action is a data point" → partially matched.** `auditEvents` is append-only with before/after JSON deltas and actor — exactly the immutable-event pattern xFarm's Agent produces. `logTreeObservation` writes category/severity/note here. **Gap:** it captures *state changes*, not *planned actions/treatments*, and advice is not yet an event type.
+- **Evidence accumulation → schema exists, unused.** `heritageRules` + `ruleEvidence` (recordType/recordId/contribution) can link any observation to a rule. This is our version of "recommendation → data point." Rules are seeded (9); evidence is not actively collected in workflows. Route `/manager/rules`.
+- **Photo capture + review queue → matched at the ingest level.** `media` (purposeTag incl. pest/disease/pruning_before-after, EXIF, GPS, match states) + GPS-proximity matching + `/photos/upload`, `/photos/review`. **Gap:** matching is GPS-only — no vision, no classification, no confidence beyond proximity.
+
+---
+
+## 3. Reuse / Learn matrix
+
+Ranked by value-for-effort (top = build first). Effort: S ≈ days, M ≈ 1–2 weeks, L ≈ 3+ weeks.
+
+| # | Idea (from xFarm) | Why it matters for Khalaf | What we'd build (concrete) | Effort | Depends on |
+|---|---|---|---|---|---|
+| 1 | **"Every logged action becomes an evidence data point"** (Field Notebook + advice-as-event) | The one true gap: each tree has a *memory* but no *action plan*. Turns the estate into a queryable timeline of what we did and what happened next. Unlocks every other row. | New `treatments`/`activities` table (`treeId`\|`groveId`, type∈{prune, spray, fertigate, irrigate, scout, harvest}, date, product, dose, area, actor, geometry, notes). Reuse `auditEvents` pattern; make `recommendation` a first-class event type. Wire `ruleEvidence` to auto-link. Route `/manager/log` + a write into `/trees/[code]` timeline. | **M** | — |
+| 2 | **Satellite time-series anomaly ("the field has a memory" over passes)** | Slide 2's whole thesis: value is *temporal* — watching stress spread over ~3 weeks would have saved 80% of a crop. We store a single date per tree; we're throwing away the signal. | Keep `treeSatelliteObservations` as-is but ingest *multiple* acquisitions. Add per-tree **rolling baseline** (trailing-year median NDVI/NDRE by phenological week) → compute each pass as **z-score vs the tree's own history**, not a global threshold. Add within-block percentile rank. Add PostGIS `ST_DWithin` neighbor query to flag *contiguous* anomalous clusters growing pass-over-pass. New view on `/manager/map` (time slider) + trend panel on `/trees/[code]`. Cloud-mask (SCL) before baselining. | **L** | Paid/scheduled Sentinel-2 feed (Copernicus is free — see Q1); NDRE band ingest |
+| 3 | **GDD-based pest forecasting (olive fruit fly)** | Pure arithmetic, no ML, and we *already have the temperature data*. Highest value-per-line-of-code on the board. Souri in the Galilee → *Bactrocera oleae* is the primary threat. | Nightly job: `GDD = max(0,(Tmax+Tmin)/2 − Tbase)` accumulated from a biofix date, read straight from `groveWeatherDaily`. Store as a derived series; fire "next generation emerging — scout now" when cumulative GDD crosses the published olive-fly threshold. New small `phenologyModels`/`gddAccumulation` table + a card on `/manager/climate`. | **S** | Biofix date + Tbase/threshold for *B. oleae* (Q3) |
+| 4 | **WhatsApp / voice low-friction data entry** | The elder/field-user lever. The ops manager and crew will not open a Next.js form mid-harvest; they *will* send a voice note. Directly feeds row 1's log. | WhatsApp Business API (or Twilio) webhook → Whisper STT → Claude with a tool returning `{date, block, tree?, operation, product, dose, area}` → write to the `treatments` table (row 1). Template confirmation reply ("Logged: spray Block 3, 4L/ha today — correct?") for low-literacy verification. New `/api/agent/whatsapp` route + STT + LLM extraction. | **M** | Row 1 (write target); WhatsApp number decision (Q2); LLM key |
+| 5 | **DSS "risk + protection degree" pattern** | The premium framing that makes advice trustworthy: not "spray" but "risk 0.7, last treatment protects until date X." Combines rows 2+3+traps into one recommendation. | A rules-driven scorer (not ML) that reads GDD (row 3) + trap counts (row 6) + rainfall/leaf-wetness proxy from weather → emits a risk score and a **post-treatment protection window** computed from the last logged spray (row 1). Surface as an event (advice-as-data-point). Card on `/manager/rules` or a new `/manager/advisory`. | **M** | Rows 1, 3, 6; heritage-rule thresholds |
+| 6 | **Automated trap counting from photos** | Removes the field-walk burden and gives row 5 its population input. Even manual weekly phone-photos + auto-count is a win — no hardware needed. | New `traps` table (point geometry, deploy date) + `trapCounts` (date, species, count, confidence, mediaId). Phone photo of a delta/sticky trap → vision LLM ("count insects matching this reference") → count + keep raw image in `media`. Route `/manager/traps`. | **M** | `media` (have it); LLM vision; pests-of-interest list (Q3) |
+| 7 | **Photo-based disease/pest detection with confidence** | Turns the 245 photos we already tag `pest`/`disease` from dead storage into diagnoses. Confidence gating routes uncertain cases to you. | Extend `media` review: on photos tagged disease/pest, call a vision LLM with an olive-specific prompt (peacock spot, olive knot, *Xylella*, fly damage) → structured `{diagnosis, confidence, treatment}`. Below threshold → "uncertain, log for review." Store verdict as an `auditEvent`. Extend `/photos/review`. | **M** | LLM vision; honesty guardrails (§4) |
+| 8 | **Compliance/logbook export** | Cheap once row 1 exists; matters only if PDO/organic certification is a goal. | One-click PDF/Excel from the `treatments` table. New `/api/export/logbook`. | **S** | Row 1; certification intent (Q) |
+
+**Build order by value-for-effort:** 3 (S, data in hand) → 1 (M, unlocks everything) → 4 (M, feeds 1) → 6 (M) → 5 (M, needs 1+3+6) → 2 (L, needs feed) → 7 (M) → 8 (S).
+
+---
+
+## 4. What to explicitly NOT copy
+
+**Multi-farm-SaaS choices that are wrong for one estate:**
+
+- **Tiered free/paid gating.** xFarm gates spray-timing and time-series behind PRO because it's a business model. We have one customer (you). Build the *actionable* features directly; there is no upsell to protect.
+- **VRA prescription maps + ISOXML/Shapefile/John Deere export.** No variable-rate sprayer, no ISOBUS fleet. Skip the entire precision-ag interchange layer. If per-tree rates ever matter, GeoJSON is enough.
+- **Warehouse/inventory movements with auto-decrement.** Over-modeled for one shed. A free-text product/dose field on the `treatments` row is sufficient.
+- **Machinery telemetry / 70+ integrations / AgRouter.** Zero relevance. A machinery *name* on an activity row is the whole requirement.
+- **Sensor hardware buildout (xSense/xNode/xLeaf).** Tempting, but the loop matters more than the hardware. Manual phone-photo trap counts + free ERA5/Open-Meteo weather drive rows 3/5/6 with no capex. Add hardware only if a specific model demands leaf-wetness you can't proxy.
+- **Custom notification library / alert marketplace.** We need ~3 alerts (frost, dry-spell escalation, pest-generation emergence), not a configurable engine.
+
+**Honesty & vocabulary guardrails (keep these — they are the heritage-brand differentiator):**
+
+- **Satellite = signal, not diagnosis.** NDVI/NDRE anomaly means "look here," never "this tree is diseased." Our `anomalyFlags` + `recommendedAction` must stay phrased as *investigate*, not *conclude*. xFarm's marketing blurs this; we won't.
+- **Estimate, not measurement.** `ageEstimate`, synthetic `healthIndex` (0–100), ERA5 weather (~25 km grid, *modeled* not in-situ), crown area *computed* from polygon. Every derived number keeps its provenance and its hedge. Do not let a health index masquerade as ground truth.
+- **Vision confidence is a routing tool, not a verdict.** Row 7's "89.5% peacock spot" is a *prompt to inspect*, logged for your confirmation — never an auto-applied diagnosis on a heritage tree.
+- **Anomaly = deviation from the tree's own baseline**, not a global threshold. A Souri on a steep dry terrace has a legitimately different NDVI than one on a valley floor. Per-tree/per-block baselining (row 2) is the honest method; a fleet-wide threshold is not.
+
+---
+
+## 5. Recommended sequence
+
+Mapped onto the existing Phase roadmap. **New table** = schema migration in `lib/db/schema.ts`; **Pure UI** = routes/components only.
+
+**Phase 1 — The record layer + free wins (the honest MVP)**
+- Row 3 **GDD olive-fly forecast** — *new small table* (`gddAccumulation`), reads existing `groveWeatherDaily`. Card on `/manager/climate`. Start here: days, not weeks.
+- Row 1 **Treatments/activities log + advice-as-event** — *new table* (`treatments`), reuse `auditEvents`/`ruleEvidence` patterns. This is the spine everything else writes to.
+- Row 8 **Logbook export** — *pure UI/API* once row 1 lands.
+- Activate `ruleEvidence`: have rows 1 and 3 write evidence links so the 9 seeded heritage rules start accumulating support/contradiction.
+
+**Phase 2 — Low-friction capture + monitoring**
+- Row 4 **WhatsApp/voice entry** — *pure UI/API* (`/api/agent/whatsapp`), writes to row 1's table. Gate on the WhatsApp-number decision.
+- Row 6 **Trap counting** — *new tables* (`traps`, `trapCounts`), reuses `media`.
+- Row 7 **Photo disease/pest detection** — *pure UI* extension of `/photos/review`; verdicts to `auditEvents`.
+- Row 5 **DSS risk + protection degree** — *mostly logic*, one thin derived-events surface; needs 1+3+6 present.
+
+**Phase 3 — Temporal intelligence (the flagship)**
+- Row 2 **Satellite time-series anomaly** — *schema extension* (multi-acquisition ingest, rolling-baseline columns/materialized view, NDRE band) + significant new UI (time slider on `/manager/map`, trend panel on `/trees/[code]`) + a scheduled Sentinel-2 ingest job. This is the "grove has a memory" payoff and the largest single build — do it last, on top of a proven record layer.
+
+New tables total: `treatments`, `gddAccumulation`, `traps`, `trapCounts` (+ satellite baseline columns). Everything else is UI/API or logic on tables you already have.
+
+---
+
+## 6. Open questions for the owner
+
+1. **Satellite time-series feed (gates Row 2, the flagship).** Copernicus Sentinel-2 is free (~5-day revisit, 10 m) via Sentinel Hub / Google Earth Engine. Are we willing to stand up a scheduled ingest against it, or do you want a paid managed feed? Row 2 is dead without multi-date ingest — this is the highest-leverage decision.
+2. **WhatsApp Business number (gates Row 4).** Is a dedicated WhatsApp Business API number (or a Twilio number) acceptable and obtainable for the estate? If not, the voice-first field entry falls back to a mobile web form (much higher friction for the crew).
+3. **Which pests/diseases matter for Souri in the Galilee (gates Rows 3, 5, 6, 7).** Confirm the target list. Presumed primary: **olive fruit fly (*Bactrocera oleae*)** for the GDD/trap DSS; **peacock spot (*Spilocaea oleagina*)**, **olive knot**, and **Xylella/*Philaenus spumarius* vector** for photo diagnosis. We need the biofix date + base temperature + degree-day threshold for the fly to make Row 3 real.
+4. **Certification intent (gates Row 8's priority).** Are we pursuing PDO/DOP or organic certification? If yes, the compliance-export format has specific requirements and Row 8 rises in priority; if no, it's a nice-to-have.
+5. **Who logs, and on what device (shapes Rows 1 & 4).** Does the ops manager carry a phone with signal in the groves? Is there offline dead-zone coverage we must queue against? This decides whether the notebook is online-only or needs an offline queue.
+6. **Trap operating model (shapes Row 6).** Manual weekly phone-photos of sticky/delta traps (zero capex, chosen build) vs. eventual camera traps — confirm we start manual.
+
+Relevant files: `/Users/basmakhalaf/AncientOS/lib/db/schema.ts` (all 14 tables, where new tables land), `/Users/basmakhalaf/AncientOS/app/manager/climate` (Row 3 host), `/Users/basmakhalaf/AncientOS/app/photos/review` (Row 7 host), `/Users/basmakhalaf/AncientOS/app/manager/map` (Row 2 host).
